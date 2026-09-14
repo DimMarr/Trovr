@@ -1,5 +1,6 @@
 # Superpowers planning artifacts — kept locally, never committed
 docs/superpowers/
+.superpowers/
 
 # Rust
 /target/
