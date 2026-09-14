@@ -1,11 +1,13 @@
 use sqlx::PgPool;
 use testcontainers::runners::AsyncRunner;
 use testcontainers::ContainerAsync;
+use testcontainers::ImageExt;
 use testcontainers_modules::postgres::Postgres;
 use uuid::Uuid;
 
 async fn start_migrated_postgres() -> (PgPool, ContainerAsync<Postgres>) {
     let container = Postgres::default()
+        .with_tag("16-alpine")
         .start()
         .await
         .expect("postgres container should start");
