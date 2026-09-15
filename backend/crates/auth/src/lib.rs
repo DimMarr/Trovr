@@ -1,2 +1,9 @@
 //! `TokenValidator` trait, `OidcValidator`, `InternalValidator`, JWT issuing.
-//! Scaffolded in Phase 1; implemented in Phase 2.
+
+mod error;
+mod validator;
+mod user;
+
+pub use error::AuthError;
+pub use user::AuthenticatedUser;
+pub use validator::TokenValidator;
