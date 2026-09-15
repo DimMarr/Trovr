@@ -67,11 +67,7 @@ impl AppConfig {
         let settings = config::Config::builder()
             .set_default("log_format", "pretty")?
             .set_default("auth_mode", "internal")?
-            .add_source(
-                config::Environment::default()
-                    .prefix("APP")
-                    .separator("__"),
-            )
+            .add_source(config::Environment::default().prefix("APP").separator("__"))
             .build()?;
 
         Ok(settings.try_deserialize()?)
@@ -125,7 +121,10 @@ mod tests {
         assert_eq!(config.auth_mode, AuthMode::Both);
         assert_eq!(config.jwt_private_key_pem, "fake-private-key-pem");
         assert_eq!(config.jwt_public_key_pem, "fake-public-key-pem");
-        assert_eq!(config.oidc_issuer_url, Some("https://idp.example.com".to_string()));
+        assert_eq!(
+            config.oidc_issuer_url,
+            Some("https://idp.example.com".to_string())
+        );
         assert_eq!(config.oidc_client_id, Some("trovr-client".to_string()));
 
         clear_env();

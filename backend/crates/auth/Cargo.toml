@@ -7,6 +7,7 @@ edition = "2024"
 argon2 = "0.5"
 async-trait = "0.1.92"
 jsonwebtoken = "9"
+# Not imported directly; enables argon2's password-hash crate's OsRng via the getrandom feature.
 rand_core = { version = "0.6", features = ["getrandom"] }
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 serde.workspace = true

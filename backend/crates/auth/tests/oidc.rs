@@ -1,4 +1,4 @@
-use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
+use jsonwebtoken::{Algorithm, EncodingKey, Header, encode};
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 use sqlx::PgPool;
@@ -8,7 +8,7 @@ use testcontainers_modules::postgres::Postgres;
 use wiremock::matchers::{method, path};
 use wiremock::{Mock, MockServer, ResponseTemplate};
 
-use trovr_auth::{OidcValidator, TokenValidator};
+use trovr_auth::{AuthError, OidcValidator, TokenValidator};
 
 const TEST_OIDC_PRIVATE_KEY_PEM: &str = "-----BEGIN RSA PRIVATE KEY-----
 MIIEowIBAAKCAQEAnyfoLdjOk+NeGtCKrspEkoM2ztxEwT3yv2Nakbxf3MMUb5+L
@@ -147,19 +147,23 @@ async fn validate_verifies_token_and_creates_a_new_user() {
     let validator = OidcValidator::new(pool.clone(), issuer.clone(), "trovr-client".to_string());
     let token = sign_test_token(&issuer, "trovr-client", "user-42", "bob@example.com", "Bob");
 
-    let user = validator.validate(&token).await.expect("token should validate");
+    let user = validator
+        .validate(&token)
+        .await
+        .expect("token should validate");
 
     assert_eq!(user.subject, "user-42");
     assert_eq!(user.issuer, issuer);
     assert_eq!(user.email, "bob@example.com");
     assert_eq!(user.display_name, "Bob");
 
-    let row_count: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE issuer = $1 AND subject = $2")
-        .bind(&issuer)
-        .bind("user-42")
-        .fetch_one(&pool)
-        .await
-        .expect("count query should succeed");
+    let row_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM users WHERE issuer = $1 AND subject = $2")
+            .bind(&issuer)
+            .bind("user-42")
+            .fetch_one(&pool)
+            .await
+            .expect("count query should succeed");
     assert_eq!(row_count, 1);
 }
 
@@ -171,22 +175,41 @@ async fn validate_upserts_the_same_user_on_a_second_login() {
 
     let validator = OidcValidator::new(pool.clone(), issuer.clone(), "trovr-client".to_string());
 
-    let first_token = sign_test_token(&issuer, "trovr-client", "user-99", "old@example.com", "Old Name");
-    let first_user = validator.validate(&first_token).await.expect("first token should validate");
+    let first_token = sign_test_token(
+        &issuer,
+        "trovr-client",
+        "user-99",
+        "old@example.com",
+        "Old Name",
+    );
+    let first_user = validator
+        .validate(&first_token)
+        .await
+        .expect("first token should validate");
 
-    let second_token = sign_test_token(&issuer, "trovr-client", "user-99", "new@example.com", "New Name");
-    let second_user = validator.validate(&second_token).await.expect("second token should validate");
+    let second_token = sign_test_token(
+        &issuer,
+        "trovr-client",
+        "user-99",
+        "new@example.com",
+        "New Name",
+    );
+    let second_user = validator
+        .validate(&second_token)
+        .await
+        .expect("second token should validate");
 
     assert_eq!(first_user.user_id, second_user.user_id);
     assert_eq!(second_user.email, "new@example.com");
     assert_eq!(second_user.display_name, "New Name");
 
-    let row_count: i64 = sqlx::query_scalar("SELECT count(*) FROM users WHERE issuer = $1 AND subject = $2")
-        .bind(&issuer)
-        .bind("user-99")
-        .fetch_one(&pool)
-        .await
-        .expect("count query should succeed");
+    let row_count: i64 =
+        sqlx::query_scalar("SELECT count(*) FROM users WHERE issuer = $1 AND subject = $2")
+            .bind(&issuer)
+            .bind("user-99")
+            .fetch_one(&pool)
+            .await
+            .expect("count query should succeed");
     assert_eq!(row_count, 1);
 }
 
@@ -197,9 +220,71 @@ async fn validate_rejects_a_token_with_the_wrong_audience() {
     let issuer = mock_server.uri();
 
     let validator = OidcValidator::new(pool.clone(), issuer.clone(), "trovr-client".to_string());
-    let token = sign_test_token(&issuer, "some-other-client", "user-1", "eve@example.com", "Eve");
+    let token = sign_test_token(
+        &issuer,
+        "some-other-client",
+        "user-1",
+        "eve@example.com",
+        "Eve",
+    );
 
     let result = validator.validate(&token).await;
 
     assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn validate_rejects_a_token_for_a_deactivated_user() {
+    let (pool, _container) = start_migrated_postgres().await;
+    let mock_server = start_mock_idp().await;
+    let issuer = mock_server.uri();
+
+    let validator = OidcValidator::new(pool.clone(), issuer.clone(), "trovr-client".to_string());
+    let token = sign_test_token(
+        &issuer,
+        "trovr-client",
+        "user-77",
+        "dana@example.com",
+        "Dana",
+    );
+
+    validator
+        .validate(&token)
+        .await
+        .expect("first validation should create the user");
+
+    sqlx::query("UPDATE users SET is_active = false WHERE issuer = $1 AND subject = $2")
+        .bind(&issuer)
+        .bind("user-77")
+        .execute(&pool)
+        .await
+        .expect("deactivating the user should succeed");
+
+    let result = validator.validate(&token).await;
+
+    assert!(matches!(result, Err(AuthError::InvalidCredentials)));
+}
+
+#[tokio::test]
+async fn validate_succeeds_when_configured_issuer_has_a_trailing_slash() {
+    let (pool, _container) = start_migrated_postgres().await;
+    let mock_server = start_mock_idp().await;
+    let issuer = mock_server.uri();
+    let issuer_with_slash = format!("{issuer}/");
+
+    let validator = OidcValidator::new(pool.clone(), issuer_with_slash, "trovr-client".to_string());
+    let token = sign_test_token(
+        &issuer,
+        "trovr-client",
+        "user-88",
+        "erin@example.com",
+        "Erin",
+    );
+
+    let user = validator
+        .validate(&token)
+        .await
+        .expect("token should validate despite trailing slash in config");
+
+    assert_eq!(user.subject, "user-88");
 }

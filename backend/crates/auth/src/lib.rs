@@ -3,8 +3,8 @@
 mod error;
 mod internal;
 mod oidc;
-mod validator;
 mod user;
+mod validator;
 
 pub use error::AuthError;
 pub use internal::InternalValidator;

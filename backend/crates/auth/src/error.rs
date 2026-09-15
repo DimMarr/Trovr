@@ -22,7 +22,10 @@ mod tests {
 
     #[test]
     fn invalid_credentials_has_a_stable_message() {
-        assert_eq!(AuthError::InvalidCredentials.to_string(), "invalid credentials");
+        assert_eq!(
+            AuthError::InvalidCredentials.to_string(),
+            "invalid credentials"
+        );
     }
 
     #[test]

@@ -78,7 +78,12 @@ async fn create_user_then_login_succeeds_and_token_validates() {
         .expect("validator should build from valid PEM keys");
 
     validator
-        .create_internal_user(&pool, "alice@example.com", "Alice", "correct horse battery staple")
+        .create_internal_user(
+            &pool,
+            "alice@example.com",
+            "Alice",
+            "correct horse battery staple",
+        )
         .await
         .expect("user creation should succeed");
 
@@ -87,7 +92,10 @@ async fn create_user_then_login_succeeds_and_token_validates() {
         .await
         .expect("login should succeed with the right password");
 
-    let user = validator.validate(&token).await.expect("issued token should validate");
+    let user = validator
+        .validate(&token)
+        .await
+        .expect("issued token should validate");
 
     assert_eq!(user.email, "alice@example.com");
     assert_eq!(user.display_name, "Alice");
@@ -101,11 +109,18 @@ async fn login_fails_with_wrong_password() {
         .expect("validator should build from valid PEM keys");
 
     validator
-        .create_internal_user(&pool, "carol@example.com", "Carol", "correct horse battery staple")
+        .create_internal_user(
+            &pool,
+            "carol@example.com",
+            "Carol",
+            "correct horse battery staple",
+        )
         .await
         .expect("user creation should succeed");
 
-    let result = validator.login(&pool, "carol@example.com", "wrong password").await;
+    let result = validator
+        .login(&pool, "carol@example.com", "wrong password")
+        .await;
 
     assert!(matches!(result, Err(AuthError::InvalidCredentials)));
 }
@@ -116,7 +131,9 @@ async fn login_fails_for_unknown_email() {
     let validator = InternalValidator::new(TEST_PRIVATE_KEY_PEM, TEST_PUBLIC_KEY_PEM)
         .expect("validator should build from valid PEM keys");
 
-    let result = validator.login(&pool, "nobody@example.com", "irrelevant").await;
+    let result = validator
+        .login(&pool, "nobody@example.com", "irrelevant")
+        .await;
 
     assert!(matches!(result, Err(AuthError::InvalidCredentials)));
 }
