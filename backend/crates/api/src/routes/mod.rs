@@ -4,6 +4,7 @@ use axum::routing::{get, post};
 use crate::AppState;
 
 pub(crate) mod auth;
+pub(crate) mod files;
 pub(crate) mod health;
 pub(crate) mod nodes;
 
@@ -20,4 +21,11 @@ pub(crate) fn api() -> Router<AppState> {
         .route("/nodes/{id}/path", get(nodes::get_path))
         .route("/nodes/{id}/rename", post(nodes::rename))
         .route("/nodes/{id}/move", post(nodes::move_node))
+        .route("/uploads", post(files::create_upload))
+        .route("/files", post(files::create_file))
+        .route(
+            "/nodes/{id}/versions",
+            get(files::list_versions).post(files::create_version),
+        )
+        .route("/nodes/{id}/download", get(files::download))
 }

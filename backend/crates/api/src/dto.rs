@@ -1,7 +1,11 @@
-use chrono::{DateTime, Utc};
+use std::collections::BTreeMap;
+use std::time::Duration;
+
+use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
 use trovr_auth::AuthenticatedUser;
-use trovr_metadata::{Node, NodeType};
+use trovr_metadata::{FileVersion, Node, NodeType};
+use trovr_storage::PresignedRequest;
 use uuid::Uuid;
 
 #[derive(Debug, Serialize)]
@@ -65,4 +69,49 @@ impl From<Node> for NodeResponse {
 
 pub(crate) fn node_list(nodes: Vec<Node>) -> Vec<NodeResponse> {
     nodes.into_iter().map(NodeResponse::from).collect()
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct VersionResponse {
+    pub id: Uuid,
+    pub version_number: i32,
+    pub size_bytes: i64,
+    pub checksum_sha256: Option<String>,
+    pub created_by: Uuid,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<FileVersion> for VersionResponse {
+    fn from(version: FileVersion) -> Self {
+        Self {
+            id: version.id,
+            version_number: version.version_number,
+            size_bytes: version.size_bytes,
+            checksum_sha256: version.checksum_sha256,
+            created_by: version.created_by,
+            created_at: version.created_at,
+        }
+    }
+}
+
+/// A request for the browser to send straight to the storage backend, with
+/// every listed header.
+#[derive(Debug, Serialize)]
+pub(crate) struct PresignedResponse {
+    pub method: String,
+    pub url: String,
+    pub headers: BTreeMap<String, String>,
+    pub expires_at: DateTime<Utc>,
+}
+
+impl PresignedResponse {
+    pub(crate) fn new(request: PresignedRequest, ttl: Duration) -> Self {
+        let ttl = TimeDelta::from_std(ttl).expect("presigned URL lifetimes fit in a TimeDelta");
+        Self {
+            method: request.method,
+            url: request.url,
+            headers: request.headers.into_iter().collect(),
+            expires_at: Utc::now() + ttl,
+        }
+    }
 }
