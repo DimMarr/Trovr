@@ -31,6 +31,18 @@ fn default_s3_force_path_style() -> bool {
     true
 }
 
+fn default_max_upload_bytes() -> i64 {
+    5_368_709_120
+}
+
+fn default_upload_url_ttl_seconds() -> u64 {
+    900
+}
+
+fn default_download_url_ttl_seconds() -> u64 {
+    300
+}
+
 #[derive(Clone, Deserialize)]
 pub struct AppConfig {
     pub bind_addr: String,
@@ -55,6 +67,16 @@ pub struct AppConfig {
     pub s3_secret_access_key: String,
     #[serde(default = "default_s3_force_path_style")]
     pub s3_force_path_style: bool,
+    /// Whether anyone may create an internal account via the API.
+    #[serde(default)]
+    pub auth_allow_registration: bool,
+    /// Largest accepted upload; a single presigned PUT is capped at 5 GiB.
+    #[serde(default = "default_max_upload_bytes")]
+    pub max_upload_bytes: i64,
+    #[serde(default = "default_upload_url_ttl_seconds")]
+    pub upload_url_ttl_seconds: u64,
+    #[serde(default = "default_download_url_ttl_seconds")]
+    pub download_url_ttl_seconds: u64,
 }
 
 impl std::fmt::Debug for AppConfig {
@@ -75,6 +97,10 @@ impl std::fmt::Debug for AppConfig {
             .field("s3_access_key_id", &self.s3_access_key_id)
             .field("s3_secret_access_key", &"<redacted>")
             .field("s3_force_path_style", &self.s3_force_path_style)
+            .field("auth_allow_registration", &self.auth_allow_registration)
+            .field("max_upload_bytes", &self.max_upload_bytes)
+            .field("upload_url_ttl_seconds", &self.upload_url_ttl_seconds)
+            .field("download_url_ttl_seconds", &self.download_url_ttl_seconds)
             .finish()
     }
 }
@@ -92,13 +118,22 @@ impl AppConfig {
     /// `APP__OIDC_ISSUER_URL`, `APP__OIDC_CLIENT_ID`, `APP__S3_ENDPOINT_URL`,
     /// `APP__S3_PUBLIC_ENDPOINT_URL`, `APP__S3_REGION`, `APP__S3_BUCKET`,
     /// `APP__S3_ACCESS_KEY_ID`, `APP__S3_SECRET_ACCESS_KEY`,
-    /// `APP__S3_FORCE_PATH_STYLE`.
+    /// `APP__S3_FORCE_PATH_STYLE`, `APP__AUTH_ALLOW_REGISTRATION`,
+    /// `APP__MAX_UPLOAD_BYTES`, `APP__UPLOAD_URL_TTL_SECONDS`,
+    /// `APP__DOWNLOAD_URL_TTL_SECONDS`.
     pub fn from_env() -> Result<Self, ConfigError> {
         let settings = config::Config::builder()
             .set_default("log_format", "pretty")?
             .set_default("auth_mode", "internal")?
             .set_default("s3_region", "us-east-1")?
             .set_default("s3_force_path_style", true)?
+            .set_default("auth_allow_registration", false)?
+            .set_default("max_upload_bytes", default_max_upload_bytes())?
+            .set_default("upload_url_ttl_seconds", default_upload_url_ttl_seconds())?
+            .set_default(
+                "download_url_ttl_seconds",
+                default_download_url_ttl_seconds(),
+            )?
             .add_source(config::Environment::default().prefix("APP").separator("__"))
             .build()?;
 
@@ -128,6 +163,10 @@ mod tests {
             std::env::remove_var("APP__S3_ACCESS_KEY_ID");
             std::env::remove_var("APP__S3_SECRET_ACCESS_KEY");
             std::env::remove_var("APP__S3_FORCE_PATH_STYLE");
+            std::env::remove_var("APP__AUTH_ALLOW_REGISTRATION");
+            std::env::remove_var("APP__MAX_UPLOAD_BYTES");
+            std::env::remove_var("APP__UPLOAD_URL_TTL_SECONDS");
+            std::env::remove_var("APP__DOWNLOAD_URL_TTL_SECONDS");
         }
     }
 
@@ -157,6 +196,10 @@ mod tests {
             std::env::set_var("APP__S3_PUBLIC_ENDPOINT_URL", "https://files.example.com");
             std::env::set_var("APP__S3_REGION", "garage");
             std::env::set_var("APP__S3_FORCE_PATH_STYLE", "false");
+            std::env::set_var("APP__AUTH_ALLOW_REGISTRATION", "true");
+            std::env::set_var("APP__MAX_UPLOAD_BYTES", "1048576");
+            std::env::set_var("APP__UPLOAD_URL_TTL_SECONDS", "120");
+            std::env::set_var("APP__DOWNLOAD_URL_TTL_SECONDS", "30");
         }
 
         let config = AppConfig::from_env().expect("config should load");
@@ -185,6 +228,10 @@ mod tests {
         assert_eq!(config.s3_access_key_id, "fake-access-key");
         assert_eq!(config.s3_secret_access_key, "fake-secret-key");
         assert!(!config.s3_force_path_style);
+        assert!(config.auth_allow_registration);
+        assert_eq!(config.max_upload_bytes, 1_048_576);
+        assert_eq!(config.upload_url_ttl_seconds, 120);
+        assert_eq!(config.download_url_ttl_seconds, 30);
 
         clear_env();
     }
@@ -205,6 +252,10 @@ mod tests {
         assert_eq!(config.s3_public_endpoint_url, None);
         assert_eq!(config.s3_region, "us-east-1");
         assert!(config.s3_force_path_style);
+        assert!(!config.auth_allow_registration);
+        assert_eq!(config.max_upload_bytes, 5_368_709_120);
+        assert_eq!(config.upload_url_ttl_seconds, 900);
+        assert_eq!(config.download_url_ttl_seconds, 300);
 
         clear_env();
     }
