@@ -48,9 +48,18 @@ impl ObjectStorage {
         }
     }
 
-    /// Returns a fresh, opaque object key; never derived from a file name.
-    pub fn new_object_key() -> String {
-        format!("objects/{}", Uuid::new_v4())
+    /// Returns a fresh key for an object uploaded by `owner_id`; never
+    /// derived from a file name. Scoping keys to their uploader lets the API
+    /// check, statelessly, that a client confirms only its own uploads.
+    pub fn new_object_key(owner_id: Uuid) -> String {
+        format!("users/{owner_id}/{}", Uuid::new_v4())
+    }
+
+    /// Whether `key` is exactly a key `new_object_key(owner_id)` could return.
+    pub fn key_belongs_to(key: &str, owner_id: Uuid) -> bool {
+        key.strip_prefix(&format!("users/{owner_id}/"))
+            .and_then(|rest| Uuid::parse_str(rest).ok().map(|id| id.to_string() == rest))
+            .unwrap_or(false)
     }
 
     /// Presigns a PUT the browser uses to upload `key` directly to storage.
@@ -171,13 +180,35 @@ mod tests {
     }
 
     #[test]
-    fn object_keys_are_unique_and_opaque() {
-        let first = ObjectStorage::new_object_key();
-        let second = ObjectStorage::new_object_key();
+    fn object_keys_are_unique_and_scoped_to_their_owner() {
+        let owner = Uuid::new_v4();
+        let other = Uuid::new_v4();
+
+        let first = ObjectStorage::new_object_key(owner);
+        let second = ObjectStorage::new_object_key(owner);
 
         assert_ne!(first, second);
-        assert!(first.starts_with("objects/"));
-        assert_eq!(first.len(), "objects/".len() + 36);
+        assert!(first.starts_with(&format!("users/{owner}/")));
+        assert!(ObjectStorage::key_belongs_to(&first, owner));
+        assert!(!ObjectStorage::key_belongs_to(&first, other));
+    }
+
+    #[test]
+    fn only_well_formed_keys_belong_to_anyone() {
+        let owner = Uuid::new_v4();
+        let id = Uuid::new_v4();
+
+        for key in [
+            format!("users/{owner}/"),
+            format!("users/{owner}/not-a-uuid"),
+            format!("users/{owner}/{id}/extra"),
+            format!("users/{owner}/../{id}"),
+            format!("users/{owner}/{}", id.simple()),
+            format!("/users/{owner}/{id}"),
+            format!("objects/{id}"),
+        ] {
+            assert!(!ObjectStorage::key_belongs_to(&key, owner), "{key}");
+        }
     }
 
     #[tokio::test]

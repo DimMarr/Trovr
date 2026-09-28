@@ -4,11 +4,14 @@ use std::time::Duration;
 
 use common::{send, start_storage, upload};
 use trovr_storage::{ObjectInfo, ObjectStorage, StorageConfig, StorageError};
+use uuid::Uuid;
+
+const OWNER: Uuid = Uuid::nil();
 
 #[tokio::test]
 async fn presigned_upload_then_head_then_download_round_trips() {
     let test = start_storage().await;
-    let key = ObjectStorage::new_object_key();
+    let key = ObjectStorage::new_object_key(OWNER);
 
     let upload = test
         .storage
@@ -61,7 +64,7 @@ async fn presigned_upload_then_head_then_download_round_trips() {
 #[tokio::test]
 async fn upload_without_the_signed_content_type_is_rejected() {
     let test = start_storage().await;
-    let key = ObjectStorage::new_object_key();
+    let key = ObjectStorage::new_object_key(OWNER);
 
     let mut upload = test
         .storage
@@ -83,7 +86,7 @@ async fn upload_without_the_signed_content_type_is_rejected() {
 #[tokio::test]
 async fn expired_upload_urls_are_rejected() {
     let test = start_storage().await;
-    let key = ObjectStorage::new_object_key();
+    let key = ObjectStorage::new_object_key(OWNER);
 
     let upload = test
         .storage
@@ -109,7 +112,7 @@ async fn head_of_a_missing_object_is_none() {
 
     let info = test
         .storage
-        .head(&ObjectStorage::new_object_key())
+        .head(&ObjectStorage::new_object_key(OWNER))
         .await
         .unwrap();
 
@@ -119,7 +122,7 @@ async fn head_of_a_missing_object_is_none() {
 #[tokio::test]
 async fn head_with_wrong_credentials_is_an_error_not_a_missing_object() {
     let test = start_storage().await;
-    let key = ObjectStorage::new_object_key();
+    let key = ObjectStorage::new_object_key(OWNER);
     upload(&test, &key, b"data").await;
 
     let misconfigured = ObjectStorage::new(&StorageConfig {
@@ -138,14 +141,16 @@ async fn head_with_wrong_credentials_is_an_error_not_a_missing_object() {
 #[tokio::test]
 async fn delete_removes_objects_across_batches_and_ignores_missing_keys() {
     let test = start_storage().await;
-    let first = ObjectStorage::new_object_key();
-    let second = ObjectStorage::new_object_key();
+    let first = ObjectStorage::new_object_key(OWNER);
+    let second = ObjectStorage::new_object_key(OWNER);
     upload(&test, &first, b"one").await;
     upload(&test, &second, b"two").await;
 
     // 1001 keys forces two DeleteObjects requests (S3 caps a request at
     // 1000 keys); all but two of them never existed.
-    let mut keys: Vec<String> = (0..999).map(|_| ObjectStorage::new_object_key()).collect();
+    let mut keys: Vec<String> = (0..999)
+        .map(|_| ObjectStorage::new_object_key(OWNER))
+        .collect();
     keys.push(first.clone());
     keys.push(second.clone());
 
