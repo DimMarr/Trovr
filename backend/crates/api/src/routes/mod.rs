@@ -1,5 +1,5 @@
 use axum::Router;
-use axum::routing::get;
+use axum::routing::{get, post};
 
 use crate::AppState;
 
@@ -8,5 +8,8 @@ pub(crate) mod health;
 
 /// Routes served under `/api/v1`.
 pub(crate) fn api() -> Router<AppState> {
-    Router::new().route("/me", get(auth::me))
+    Router::new()
+        .route("/auth/register", post(auth::register))
+        .route("/auth/login", post(auth::login))
+        .route("/me", get(auth::me))
 }
