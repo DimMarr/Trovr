@@ -4,3 +4,23 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+axum = "0.8"
+chrono = { version = "0.4.45", features = ["serde"] }
+serde.workspace = true
+serde_json = "1.0.151"
+sqlx.workspace = true
+tower-http = { version = "0.7", features = ["trace"] }
+tracing.workspace = true
+trovr-auth = { version = "0.1.0", path = "../auth" }
+trovr-metadata = { version = "0.1.0", path = "../metadata" }
+trovr-storage = { version = "0.1.0", path = "../storage" }
+uuid = { workspace = true, features = ["serde"] }
+
+[dev-dependencies]
+reqwest = { version = "0.12", default-features = false }
+sqlx = { workspace = true, features = ["migrate"] }
+testcontainers.workspace = true
+testcontainers-modules.workspace = true
+tokio.workspace = true
+tower = { version = "0.5", features = ["util"] }
+uuid = { workspace = true, features = ["v4"] }
