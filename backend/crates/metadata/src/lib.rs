@@ -1,2 +1,8 @@
 //! Nodes/versions/permissions domain logic and sqlx queries.
-//! Scaffolded in Phase 1; implemented in Phase 3.
+
+mod error;
+mod node;
+mod validation;
+
+pub use error::MetadataError;
+pub use node::{FileVersion, NewContent, NewFile, Node, NodeType};
