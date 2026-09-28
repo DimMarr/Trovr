@@ -5,6 +5,7 @@ mod node;
 mod organize;
 mod store;
 mod validation;
+mod versions;
 
 pub use error::MetadataError;
 pub use node::{FileVersion, NewContent, NewFile, Node, NodeType};
