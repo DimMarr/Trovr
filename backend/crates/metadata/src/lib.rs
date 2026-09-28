@@ -4,6 +4,7 @@ mod error;
 mod node;
 mod organize;
 mod store;
+mod trash;
 mod validation;
 mod versions;
 
