@@ -2,6 +2,7 @@
 
 mod error;
 mod node;
+mod organize;
 mod store;
 mod validation;
 
