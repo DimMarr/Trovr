@@ -11,5 +11,5 @@ mod versions;
 
 pub use error::MetadataError;
 pub use node::{FileVersion, NewContent, NewFile, Node, NodeType};
-pub use sharing::{Role, Share};
+pub use sharing::{Role, Share, ShareLink};
 pub use store::NodeStore;

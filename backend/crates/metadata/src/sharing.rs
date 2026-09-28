@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use crate::store::fetch_live_node;
 use crate::{MetadataError, Node, NodeStore};
 
 /// Access level on a node, ordered `Viewer < Editor < Owner` like the
@@ -20,6 +21,19 @@ pub struct Share {
     pub node_id: Uuid,
     #[sqlx(rename = "principal_id")]
     pub user_id: Uuid,
+    pub role: Role,
+    pub granted_by: Uuid,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+/// A public, read-only link to a node and its subtree.
+#[derive(Debug, Clone, PartialEq, Eq, sqlx::FromRow)]
+pub struct ShareLink {
+    pub id: Uuid,
+    pub node_id: Uuid,
+    #[sqlx(rename = "share_token")]
+    pub token: String,
     pub role: Role,
     pub granted_by: Uuid,
     pub expires_at: Option<DateTime<Utc>>,
@@ -146,5 +160,96 @@ impl NodeStore {
         .await?;
 
         Ok(nodes)
+    }
+
+    /// Creates a read-only public link. The token carries 244 random bits
+    /// (two v4 UUIDs).
+    pub async fn create_link(
+        &self,
+        node_id: Uuid,
+        expires_at: Option<DateTime<Utc>>,
+        granted_by: Uuid,
+    ) -> Result<ShareLink, MetadataError> {
+        let token = format!("{}{}", Uuid::new_v4().simple(), Uuid::new_v4().simple());
+        let link = sqlx::query_as::<_, ShareLink>(
+            "INSERT INTO node_permissions (node_id, principal_type, role, share_token, expires_at, granted_by) \
+             VALUES ($1, 'link', 'viewer', $2, $3, $4) \
+             RETURNING id, node_id, share_token, role, granted_by, expires_at, created_at",
+        )
+        .bind(node_id)
+        .bind(token)
+        .bind(expires_at)
+        .bind(granted_by)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(link)
+    }
+
+    pub async fn list_links(&self, node_id: Uuid) -> Result<Vec<ShareLink>, MetadataError> {
+        let links = sqlx::query_as::<_, ShareLink>(
+            "SELECT id, node_id, share_token, role, granted_by, expires_at, created_at \
+             FROM node_permissions WHERE node_id = $1 AND principal_type = 'link' \
+             ORDER BY created_at, id",
+        )
+        .bind(node_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(links)
+    }
+
+    pub async fn delete_link(&self, node_id: Uuid, link_id: Uuid) -> Result<(), MetadataError> {
+        let deleted = sqlx::query(
+            "DELETE FROM node_permissions WHERE id = $1 AND node_id = $2 AND principal_type = 'link'",
+        )
+        .bind(link_id)
+        .bind(node_id)
+        .execute(&self.pool)
+        .await?
+        .rows_affected();
+
+        if deleted == 0 {
+            return Err(MetadataError::NotFound);
+        }
+        Ok(())
+    }
+
+    /// Finds a live, unexpired link whose node is live.
+    pub async fn resolve_link(&self, token: &str) -> Result<ShareLink, MetadataError> {
+        let link = sqlx::query_as::<_, ShareLink>(
+            "SELECT id, node_id, share_token, role, granted_by, expires_at, created_at \
+             FROM node_permissions \
+             WHERE share_token = $1 AND principal_type = 'link' \
+               AND (expires_at IS NULL OR expires_at > now())",
+        )
+        .bind(token)
+        .fetch_optional(&self.pool)
+        .await?
+        .ok_or(MetadataError::NotFound)?;
+
+        fetch_live_node(&self.pool, link.node_id).await?;
+        Ok(link)
+    }
+
+    /// Whether `node_id` is `root_id` or one of its descendants, with nothing
+    /// trashed between them.
+    pub async fn is_within(&self, node_id: Uuid, root_id: Uuid) -> Result<bool, MetadataError> {
+        let within: bool = sqlx::query_scalar(
+            "WITH RECURSIVE up AS (
+                 SELECT id, parent_id, trashed_at FROM nodes WHERE id = $1
+                 UNION ALL
+                 SELECT p.id, p.parent_id, p.trashed_at
+                 FROM nodes p JOIN up u ON p.id = u.parent_id AND u.id <> $2
+             )
+             SELECT EXISTS (SELECT 1 FROM up WHERE id = $2)
+                AND NOT EXISTS (SELECT 1 FROM up WHERE trashed_at IS NOT NULL)",
+        )
+        .bind(node_id)
+        .bind(root_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(within)
     }
 }

@@ -190,3 +190,120 @@ async fn list_shared_with_returns_directly_shared_live_nodes() {
 
     assert_eq!(names, vec!["docs", "nested"]);
 }
+
+#[tokio::test]
+async fn links_resolve_until_deleted_or_expired() {
+    let db = start_store().await;
+    let alice = insert_user(&db.pool, "alice").await;
+    let folder = db.store.create_folder(alice, None, "folder").await.unwrap();
+    let other = db.store.create_folder(alice, None, "other").await.unwrap();
+
+    let link = db.store.create_link(folder.id, None, alice).await.unwrap();
+    let second = db.store.create_link(folder.id, None, alice).await.unwrap();
+    assert_ne!(link.token, second.token);
+    assert!(link.token.len() >= 60);
+    assert_eq!(link.role, Role::Viewer);
+    assert_eq!(
+        db.store.resolve_link(&link.token).await.unwrap().node_id,
+        folder.id
+    );
+    assert_eq!(db.store.list_links(folder.id).await.unwrap().len(), 2);
+
+    let expired = db
+        .store
+        .create_link(
+            folder.id,
+            Some(chrono::Utc::now() - chrono::TimeDelta::minutes(1)),
+            alice,
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        db.store.resolve_link(&expired.token).await,
+        Err(MetadataError::NotFound)
+    ));
+
+    assert!(matches!(
+        db.store.delete_link(other.id, link.id).await,
+        Err(MetadataError::NotFound)
+    ));
+    db.store.delete_link(folder.id, link.id).await.unwrap();
+    assert!(matches!(
+        db.store.resolve_link(&link.token).await,
+        Err(MetadataError::NotFound)
+    ));
+    assert!(matches!(
+        db.store.resolve_link("unknown").await,
+        Err(MetadataError::NotFound)
+    ));
+}
+
+#[tokio::test]
+async fn links_to_trashed_nodes_do_not_resolve() {
+    let db = start_store().await;
+    let alice = insert_user(&db.pool, "alice").await;
+    let folder = db.store.create_folder(alice, None, "folder").await.unwrap();
+    let child = db
+        .store
+        .create_folder(alice, Some(folder.id), "child")
+        .await
+        .unwrap();
+    let link = db.store.create_link(child.id, None, alice).await.unwrap();
+
+    db.store.trash(folder.id).await.unwrap();
+    assert!(matches!(
+        db.store.resolve_link(&link.token).await,
+        Err(MetadataError::NotFound)
+    ));
+
+    db.store.restore(folder.id).await.unwrap();
+    assert_eq!(
+        db.store.resolve_link(&link.token).await.unwrap().node_id,
+        child.id
+    );
+}
+
+#[tokio::test]
+async fn is_within_only_accepts_the_subtree() {
+    let db = start_store().await;
+    let alice = insert_user(&db.pool, "alice").await;
+    let parent = db.store.create_folder(alice, None, "parent").await.unwrap();
+    let root = db
+        .store
+        .create_folder(alice, Some(parent.id), "root")
+        .await
+        .unwrap();
+    let sibling = db
+        .store
+        .create_folder(alice, Some(parent.id), "sibling")
+        .await
+        .unwrap();
+    let child = db
+        .store
+        .create_folder(alice, Some(root.id), "child")
+        .await
+        .unwrap();
+    let grandchild = db
+        .store
+        .create_folder(alice, Some(child.id), "grandchild")
+        .await
+        .unwrap();
+    let hidden = db
+        .store
+        .create_folder(alice, Some(root.id), "hidden")
+        .await
+        .unwrap();
+    let under_hidden = db
+        .store
+        .create_folder(alice, Some(hidden.id), "under")
+        .await
+        .unwrap();
+    db.store.trash(hidden.id).await.unwrap();
+
+    for node in [root.id, child.id, grandchild.id] {
+        assert!(db.store.is_within(node, root.id).await.unwrap());
+    }
+    for node in [parent.id, sibling.id, hidden.id, under_hidden.id] {
+        assert!(!db.store.is_within(node, root.id).await.unwrap());
+    }
+}

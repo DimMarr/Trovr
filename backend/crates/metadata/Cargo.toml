@@ -7,7 +7,7 @@ edition = "2024"
 chrono = "0.4.45"
 sqlx.workspace = true
 thiserror.workspace = true
-uuid.workspace = true
+uuid = { workspace = true, features = ["v4"] }
 
 [dev-dependencies]
 sqlx = { workspace = true, features = ["migrate"] }
