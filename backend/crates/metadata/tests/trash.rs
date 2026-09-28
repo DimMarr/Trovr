@@ -261,3 +261,30 @@ async fn purge_only_accepts_trashed_nodes() {
         "only the trashed subtree root can be purged"
     );
 }
+
+#[tokio::test]
+async fn find_node_sees_trashed_nodes_and_their_descendants() {
+    let db = start_store().await;
+    let alice = insert_user(&db.pool, "alice").await;
+    let folder = db.store.create_folder(alice, None, "folder").await.unwrap();
+    let child = db
+        .store
+        .create_folder(alice, Some(folder.id), "child")
+        .await
+        .unwrap();
+    db.store.trash(folder.id).await.unwrap();
+
+    assert!(
+        db.store
+            .find_node(folder.id)
+            .await
+            .unwrap()
+            .trashed_at
+            .is_some()
+    );
+    assert_eq!(db.store.find_node(child.id).await.unwrap().id, child.id);
+    assert!(matches!(
+        db.store.find_node(Uuid::new_v4()).await,
+        Err(MetadataError::NotFound)
+    ));
+}

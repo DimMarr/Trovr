@@ -96,6 +96,16 @@ impl NodeStore {
         fetch_live_node(&self.pool, node_id).await
     }
 
+    /// Loads a node whatever its trash state, e.g. to authorize restoring or
+    /// purging it.
+    pub async fn find_node(&self, node_id: Uuid) -> Result<Node, MetadataError> {
+        sqlx::query_as::<_, Node>("SELECT * FROM nodes WHERE id = $1")
+            .bind(node_id)
+            .fetch_optional(&self.pool)
+            .await?
+            .ok_or(MetadataError::NotFound)
+    }
+
     /// Returns the chain of nodes from the owner's root down to `node_id`
     /// (inclusive), e.g. for breadcrumbs.
     pub async fn get_path(&self, node_id: Uuid) -> Result<Vec<Node>, MetadataError> {

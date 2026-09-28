@@ -7,6 +7,9 @@ const NAME_CONSTRAINTS: [&str; 2] = [
     "unique_live_root_name_per_owner",
 ];
 
+/// Unique index (see migrations) guaranteeing one object per file version.
+const STORAGE_KEY_CONSTRAINT: &str = "unique_storage_key";
+
 #[derive(Debug, Error)]
 pub enum MetadataError {
     #[error("node not found")]
@@ -27,18 +30,22 @@ pub enum MetadataError {
     NotTrashed,
     #[error("the parent folder is in the trash; restore it first")]
     ParentTrashed,
+    #[error("this upload is already recorded as a file version")]
+    StorageKeyInUse,
     #[error("database error: {0}")]
     Database(sqlx::Error),
 }
 
 impl From<sqlx::Error> for MetadataError {
     fn from(err: sqlx::Error) -> Self {
-        if let sqlx::Error::Database(db_err) = &err
-            && db_err
-                .constraint()
-                .is_some_and(|constraint| NAME_CONSTRAINTS.contains(&constraint))
-        {
-            return Self::NameConflict;
+        if let sqlx::Error::Database(db_err) = &err {
+            match db_err.constraint() {
+                Some(constraint) if NAME_CONSTRAINTS.contains(&constraint) => {
+                    return Self::NameConflict;
+                }
+                Some(STORAGE_KEY_CONSTRAINT) => return Self::StorageKeyInUse,
+                _ => {}
+            }
         }
         Self::Database(err)
     }

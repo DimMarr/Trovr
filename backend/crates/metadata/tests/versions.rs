@@ -98,3 +98,29 @@ async fn versions_are_file_only_and_validated() {
     ));
     assert_eq!(db.store.list_versions(file.id).await.unwrap().len(), 1);
 }
+
+#[tokio::test]
+async fn a_storage_key_can_back_only_one_version() {
+    let db = start_store().await;
+    let alice = insert_user(&db.pool, "alice").await;
+    let file = db
+        .store
+        .create_file(new_file(alice, None, "a.txt", "shared-key"))
+        .await
+        .unwrap();
+
+    assert!(matches!(
+        db.store
+            .add_version(file.id, alice, content("shared-key", 1))
+            .await,
+        Err(MetadataError::StorageKeyInUse)
+    ));
+    assert!(matches!(
+        db.store
+            .create_file(new_file(alice, None, "b.txt", "shared-key"))
+            .await,
+        Err(MetadataError::StorageKeyInUse)
+    ));
+    assert_eq!(db.store.list_versions(file.id).await.unwrap().len(), 1);
+    assert_eq!(db.store.list_root(alice).await.unwrap().len(), 1);
+}
