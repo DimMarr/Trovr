@@ -5,6 +5,7 @@ use crate::AppState;
 
 pub(crate) mod auth;
 pub(crate) mod health;
+pub(crate) mod nodes;
 
 /// Routes served under `/api/v1`.
 pub(crate) fn api() -> Router<AppState> {
@@ -12,4 +13,11 @@ pub(crate) fn api() -> Router<AppState> {
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
         .route("/me", get(auth::me))
+        .route("/nodes", get(nodes::list_root))
+        .route("/folders", post(nodes::create_folder))
+        .route("/nodes/{id}", get(nodes::get_node))
+        .route("/nodes/{id}/children", get(nodes::list_children))
+        .route("/nodes/{id}/path", get(nodes::get_path))
+        .route("/nodes/{id}/rename", post(nodes::rename))
+        .route("/nodes/{id}/move", post(nodes::move_node))
 }

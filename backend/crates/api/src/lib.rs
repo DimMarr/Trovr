@@ -1,5 +1,6 @@
 //! Axum routes, handlers, request/response DTOs.
 
+mod access;
 mod dto;
 mod error;
 mod extract;
