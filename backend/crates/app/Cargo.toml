@@ -5,11 +5,16 @@ edition = "2024"
 
 [dependencies]
 anyhow = { workspace = true }
+axum = "0.8"
 sqlx = { workspace = true, features = ["migrate"] }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["net", "signal"] }
 tracing = { workspace = true }
 tracing-subscriber = { workspace = true }
+trovr-api = { version = "0.1.0", path = "../api" }
+trovr-auth = { version = "0.1.0", path = "../auth" }
 trovr-config = { version = "0.1.0", path = "../config" }
+trovr-metadata = { version = "0.1.0", path = "../metadata" }
+trovr-storage = { version = "0.1.0", path = "../storage" }
 
 [dev-dependencies]
 testcontainers = { workspace = true }

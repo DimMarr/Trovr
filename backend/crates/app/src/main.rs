@@ -1,4 +1,4 @@
-use trovr::{health_check, init_tracing, run_migrations};
+use trovr::{build_state, health_check, init_tracing, run_migrations, shutdown_signal};
 use trovr_config::AppConfig;
 
 #[tokio::main]
@@ -15,8 +15,15 @@ async fn main() -> anyhow::Result<()> {
 
     run_migrations(&pool).await?;
     health_check(&pool).await?;
-
     tracing::info!("migrations applied and database reachable");
+
+    let state = build_state(&config, pool)?;
+    let listener = tokio::net::TcpListener::bind(&config.bind_addr).await?;
+    tracing::info!(addr = %listener.local_addr()?, "listening");
+
+    axum::serve(listener, trovr_api::router(state))
+        .with_graceful_shutdown(shutdown_signal())
+        .await?;
 
     Ok(())
 }

@@ -3842,13 +3842,18 @@ name = "trovr"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "axum",
  "sqlx",
  "testcontainers",
  "testcontainers-modules",
  "tokio",
  "tracing",
  "tracing-subscriber",
+ "trovr-api",
+ "trovr-auth",
  "trovr-config",
+ "trovr-metadata",
+ "trovr-storage",
  "uuid",
 ]
 
