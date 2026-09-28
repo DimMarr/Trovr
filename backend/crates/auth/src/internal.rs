@@ -62,7 +62,13 @@ impl InternalValidator {
         .bind(&email)
         .bind(display_name)
         .fetch_one(&mut *tx)
-        .await?;
+        .await
+        .map_err(|err| match err {
+            sqlx::Error::Database(db_err) if db_err.is_unique_violation() => {
+                AuthError::UserAlreadyExists
+            }
+            err => AuthError::Database(err),
+        })?;
 
         sqlx::query("INSERT INTO local_credentials (user_id, password_hash) VALUES ($1, $2)")
             .bind(user_id)

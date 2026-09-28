@@ -137,3 +137,31 @@ async fn login_fails_for_unknown_email() {
 
     assert!(matches!(result, Err(AuthError::InvalidCredentials)));
 }
+
+#[tokio::test]
+async fn creating_the_same_email_twice_is_rejected() {
+    let (pool, _container) = start_migrated_postgres().await;
+    let validator = InternalValidator::new(TEST_PRIVATE_KEY_PEM, TEST_PUBLIC_KEY_PEM)
+        .expect("validator should build from valid PEM keys");
+
+    validator
+        .create_internal_user(
+            &pool,
+            "dave@example.com",
+            "Dave",
+            "correct horse battery staple",
+        )
+        .await
+        .expect("first creation should succeed");
+
+    let duplicate = validator
+        .create_internal_user(
+            &pool,
+            "  Dave@Example.com ",
+            "Dave again",
+            "another password",
+        )
+        .await;
+
+    assert!(matches!(duplicate, Err(AuthError::UserAlreadyExists)));
+}

@@ -4,6 +4,8 @@ use thiserror::Error;
 pub enum AuthError {
     #[error("invalid credentials")]
     InvalidCredentials,
+    #[error("a user with this email already exists")]
+    UserAlreadyExists,
     #[error("invalid token: {0}")]
     InvalidToken(String),
     #[error("database error: {0}")]
