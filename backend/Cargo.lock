@@ -3867,6 +3867,8 @@ name = "trovr-storage"
 version = "0.1.0"
 dependencies = [
  "aws-sdk-s3",
+ "reqwest",
+ "testcontainers",
  "thiserror",
  "tokio",
  "uuid",
