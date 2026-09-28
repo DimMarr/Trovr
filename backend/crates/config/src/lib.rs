@@ -23,6 +23,14 @@ fn default_auth_mode() -> AuthMode {
     AuthMode::Internal
 }
 
+fn default_s3_region() -> String {
+    "us-east-1".to_string()
+}
+
+fn default_s3_force_path_style() -> bool {
+    true
+}
+
 #[derive(Clone, Deserialize)]
 pub struct AppConfig {
     pub bind_addr: String,
@@ -35,6 +43,18 @@ pub struct AppConfig {
     pub jwt_public_key_pem: String,
     pub oidc_issuer_url: Option<String>,
     pub oidc_client_id: Option<String>,
+    /// How the server reaches the S3-compatible backend; `None` means AWS S3.
+    pub s3_endpoint_url: Option<String>,
+    /// How browsers reach the backend, when that differs from
+    /// `s3_endpoint_url` (presigned URLs embed the host they were signed for).
+    pub s3_public_endpoint_url: Option<String>,
+    #[serde(default = "default_s3_region")]
+    pub s3_region: String,
+    pub s3_bucket: String,
+    pub s3_access_key_id: String,
+    pub s3_secret_access_key: String,
+    #[serde(default = "default_s3_force_path_style")]
+    pub s3_force_path_style: bool,
 }
 
 impl std::fmt::Debug for AppConfig {
@@ -48,6 +68,13 @@ impl std::fmt::Debug for AppConfig {
             .field("jwt_public_key_pem", &"<redacted>")
             .field("oidc_issuer_url", &self.oidc_issuer_url)
             .field("oidc_client_id", &self.oidc_client_id)
+            .field("s3_endpoint_url", &self.s3_endpoint_url)
+            .field("s3_public_endpoint_url", &self.s3_public_endpoint_url)
+            .field("s3_region", &self.s3_region)
+            .field("s3_bucket", &self.s3_bucket)
+            .field("s3_access_key_id", &self.s3_access_key_id)
+            .field("s3_secret_access_key", &"<redacted>")
+            .field("s3_force_path_style", &self.s3_force_path_style)
             .finish()
     }
 }
@@ -62,11 +89,16 @@ impl AppConfig {
     /// Loads configuration from environment variables prefixed with `APP__`,
     /// e.g. `APP__BIND_ADDR`, `APP__DATABASE_URL`, `APP__LOG_FORMAT`,
     /// `APP__AUTH_MODE`, `APP__JWT_PRIVATE_KEY_PEM`, `APP__JWT_PUBLIC_KEY_PEM`,
-    /// `APP__OIDC_ISSUER_URL`, `APP__OIDC_CLIENT_ID`.
+    /// `APP__OIDC_ISSUER_URL`, `APP__OIDC_CLIENT_ID`, `APP__S3_ENDPOINT_URL`,
+    /// `APP__S3_PUBLIC_ENDPOINT_URL`, `APP__S3_REGION`, `APP__S3_BUCKET`,
+    /// `APP__S3_ACCESS_KEY_ID`, `APP__S3_SECRET_ACCESS_KEY`,
+    /// `APP__S3_FORCE_PATH_STYLE`.
     pub fn from_env() -> Result<Self, ConfigError> {
         let settings = config::Config::builder()
             .set_default("log_format", "pretty")?
             .set_default("auth_mode", "internal")?
+            .set_default("s3_region", "us-east-1")?
+            .set_default("s3_force_path_style", true)?
             .add_source(config::Environment::default().prefix("APP").separator("__"))
             .build()?;
 
@@ -89,6 +121,13 @@ mod tests {
             std::env::remove_var("APP__JWT_PUBLIC_KEY_PEM");
             std::env::remove_var("APP__OIDC_ISSUER_URL");
             std::env::remove_var("APP__OIDC_CLIENT_ID");
+            std::env::remove_var("APP__S3_ENDPOINT_URL");
+            std::env::remove_var("APP__S3_PUBLIC_ENDPOINT_URL");
+            std::env::remove_var("APP__S3_REGION");
+            std::env::remove_var("APP__S3_BUCKET");
+            std::env::remove_var("APP__S3_ACCESS_KEY_ID");
+            std::env::remove_var("APP__S3_SECRET_ACCESS_KEY");
+            std::env::remove_var("APP__S3_FORCE_PATH_STYLE");
         }
     }
 
@@ -98,6 +137,9 @@ mod tests {
             std::env::set_var("APP__DATABASE_URL", "postgres://user:pass@localhost/trovr");
             std::env::set_var("APP__JWT_PRIVATE_KEY_PEM", "fake-private-key-pem");
             std::env::set_var("APP__JWT_PUBLIC_KEY_PEM", "fake-public-key-pem");
+            std::env::set_var("APP__S3_BUCKET", "trovr");
+            std::env::set_var("APP__S3_ACCESS_KEY_ID", "fake-access-key");
+            std::env::set_var("APP__S3_SECRET_ACCESS_KEY", "fake-secret-key");
         }
     }
 
@@ -111,6 +153,10 @@ mod tests {
             std::env::set_var("APP__AUTH_MODE", "both");
             std::env::set_var("APP__OIDC_ISSUER_URL", "https://idp.example.com");
             std::env::set_var("APP__OIDC_CLIENT_ID", "trovr-client");
+            std::env::set_var("APP__S3_ENDPOINT_URL", "http://minio:9000");
+            std::env::set_var("APP__S3_PUBLIC_ENDPOINT_URL", "https://files.example.com");
+            std::env::set_var("APP__S3_REGION", "garage");
+            std::env::set_var("APP__S3_FORCE_PATH_STYLE", "false");
         }
 
         let config = AppConfig::from_env().expect("config should load");
@@ -126,6 +172,19 @@ mod tests {
             Some("https://idp.example.com".to_string())
         );
         assert_eq!(config.oidc_client_id, Some("trovr-client".to_string()));
+        assert_eq!(
+            config.s3_endpoint_url,
+            Some("http://minio:9000".to_string())
+        );
+        assert_eq!(
+            config.s3_public_endpoint_url,
+            Some("https://files.example.com".to_string())
+        );
+        assert_eq!(config.s3_region, "garage");
+        assert_eq!(config.s3_bucket, "trovr");
+        assert_eq!(config.s3_access_key_id, "fake-access-key");
+        assert_eq!(config.s3_secret_access_key, "fake-secret-key");
+        assert!(!config.s3_force_path_style);
 
         clear_env();
     }
@@ -142,6 +201,10 @@ mod tests {
         assert_eq!(config.auth_mode, AuthMode::Internal);
         assert_eq!(config.oidc_issuer_url, None);
         assert_eq!(config.oidc_client_id, None);
+        assert_eq!(config.s3_endpoint_url, None);
+        assert_eq!(config.s3_public_endpoint_url, None);
+        assert_eq!(config.s3_region, "us-east-1");
+        assert!(config.s3_force_path_style);
 
         clear_env();
     }
@@ -170,6 +233,8 @@ mod tests {
         assert!(!debug_output.contains("fake-private-key-pem"));
         assert!(!debug_output.contains("fake-public-key-pem"));
         assert!(!debug_output.contains("user:pass"));
+        assert!(!debug_output.contains("fake-secret-key"));
+        assert!(debug_output.contains("fake-access-key"));
         assert!(debug_output.contains("<redacted>"));
 
         clear_env();
