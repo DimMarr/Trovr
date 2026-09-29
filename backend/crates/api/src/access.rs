@@ -46,11 +46,3 @@ pub(crate) fn require(role: Option<Role>, needed: Role) -> Result<Role, ApiError
         Some(role) => Ok(role),
     }
 }
-
-pub(crate) fn role_name(role: Role) -> &'static str {
-    match role {
-        Role::Viewer => "viewer",
-        Role::Editor => "editor",
-        Role::Owner => "owner",
-    }
-}

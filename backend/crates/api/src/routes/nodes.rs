@@ -5,8 +5,8 @@ use serde::{Deserialize, Serialize};
 use trovr_metadata::Role;
 use uuid::Uuid;
 
-use crate::access::{authorize, role_name};
-use crate::dto::{NodeResponse, node_list};
+use crate::access::authorize;
+use crate::dto::{NodeResponse, node_list, role_name};
 use crate::extract::CurrentUser;
 use crate::{ApiError, AppState};
 

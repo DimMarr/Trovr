@@ -3,8 +3,8 @@ use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
 use serde::Serialize;
-use trovr_auth::AuthenticatedUser;
-use trovr_metadata::{FileVersion, Node, NodeType};
+use trovr_auth::{AuthenticatedUser, UserProfile};
+use trovr_metadata::{FileVersion, Node, NodeType, Role, Share, ShareLink};
 use trovr_storage::PresignedRequest;
 use uuid::Uuid;
 
@@ -25,6 +25,77 @@ impl From<AuthenticatedUser> for UserResponse {
             issuer: user.issuer,
         }
     }
+}
+
+/// Another user, as shown to someone sharing with them.
+#[derive(Debug, Serialize)]
+pub(crate) struct UserSummary {
+    pub id: Uuid,
+    pub email: String,
+    pub display_name: String,
+}
+
+impl From<UserProfile> for UserSummary {
+    fn from(profile: UserProfile) -> Self {
+        Self {
+            id: profile.id,
+            email: profile.email,
+            display_name: profile.display_name,
+        }
+    }
+}
+
+pub(crate) fn role_name(role: Role) -> &'static str {
+    match role {
+        Role::Viewer => "viewer",
+        Role::Editor => "editor",
+        Role::Owner => "owner",
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct ShareResponse {
+    pub user: UserSummary,
+    pub role: &'static str,
+    pub created_at: DateTime<Utc>,
+}
+
+impl ShareResponse {
+    pub(crate) fn new(share: Share, user: UserSummary) -> Self {
+        Self {
+            user,
+            role: role_name(share.role),
+            created_at: share.created_at,
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct LinkResponse {
+    pub id: Uuid,
+    pub token: String,
+    pub role: &'static str,
+    pub expires_at: Option<DateTime<Utc>>,
+    pub created_at: DateTime<Utc>,
+}
+
+impl From<ShareLink> for LinkResponse {
+    fn from(link: ShareLink) -> Self {
+        Self {
+            id: link.id,
+            token: link.token,
+            role: role_name(link.role),
+            expires_at: link.expires_at,
+            created_at: link.created_at,
+        }
+    }
+}
+
+/// Everyone and every link a node is shared with.
+#[derive(Debug, Serialize)]
+pub(crate) struct SharesResponse {
+    pub users: Vec<ShareResponse>,
+    pub links: Vec<LinkResponse>,
 }
 
 #[derive(Debug, Serialize)]

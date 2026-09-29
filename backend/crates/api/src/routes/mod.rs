@@ -7,6 +7,7 @@ pub(crate) mod auth;
 pub(crate) mod files;
 pub(crate) mod health;
 pub(crate) mod nodes;
+pub(crate) mod shares;
 pub(crate) mod trash;
 
 /// Routes served under `/api/v1`.
@@ -32,4 +33,7 @@ pub(crate) fn api() -> Router<AppState> {
             get(files::list_versions).post(files::create_version),
         )
         .route("/nodes/{id}/download", get(files::download))
+        .route("/nodes/{id}/shares", get(shares::list).post(shares::share))
+        .route("/nodes/{id}/shares/{user_id}", delete(shares::unshare))
+        .route("/shared", get(shares::shared_with_me))
 }
