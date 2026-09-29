@@ -11,14 +11,8 @@ import {
   TableRow,
 } from '@/components/ui/table'
 import { formatBytes, formatDate } from '@/lib/format'
+import { sortNodes } from '@/lib/nodes'
 import { strings } from '@/strings'
-
-/** Folders first, then files, each by name. */
-export function sortNodes(nodes: Node[]): Node[] {
-  return [...nodes].sort((a, b) =>
-    a.type === b.type ? a.name.localeCompare(b.name) : a.type === 'folder' ? -1 : 1,
-  )
-}
 
 export function NodeTable({
   nodes,
