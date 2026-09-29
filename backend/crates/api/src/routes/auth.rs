@@ -32,6 +32,41 @@ pub(crate) struct TokenResponse {
     token_type: &'static str,
 }
 
+#[derive(Debug, Serialize)]
+pub(crate) struct AuthConfigResponse {
+    internal: InternalConfig,
+    oidc: Option<OidcConfig>,
+    max_upload_bytes: i64,
+}
+
+#[derive(Debug, Serialize)]
+struct InternalConfig {
+    enabled: bool,
+    registration: bool,
+}
+
+#[derive(Debug, Serialize)]
+struct OidcConfig {
+    issuer: String,
+    client_id: String,
+}
+
+/// Public: tells clients which sign-in methods to offer.
+pub(crate) async fn config(State(state): State<AppState>) -> Json<AuthConfigResponse> {
+    let internal_enabled = state.internal_auth.is_some();
+    Json(AuthConfigResponse {
+        internal: InternalConfig {
+            enabled: internal_enabled,
+            registration: internal_enabled && state.settings.allow_registration,
+        },
+        oidc: state.oidc_auth.as_deref().map(|oidc| OidcConfig {
+            issuer: oidc.issuer_url().to_string(),
+            client_id: oidc.client_id().to_string(),
+        }),
+        max_upload_bytes: state.settings.max_upload_bytes,
+    })
+}
+
 pub(crate) async fn register(
     State(state): State<AppState>,
     Json(body): Json<RegisterRequest>,

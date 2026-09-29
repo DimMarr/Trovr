@@ -134,3 +134,51 @@ async fn internal_endpoints_do_not_exist_in_oidc_mode() {
     assert_eq!(registered.status, StatusCode::NOT_FOUND);
     assert_eq!(logged_in.status, StatusCode::NOT_FOUND);
 }
+
+#[tokio::test]
+async fn auth_config_describes_enabled_sign_in_methods() {
+    let internal = TestApp::start().await;
+    let config = internal
+        .request(Method::GET, "/api/v1/auth/config", None, None)
+        .await;
+    assert_eq!(config.status, StatusCode::OK);
+    assert_eq!(
+        config.body,
+        json!({
+            "internal": { "enabled": true, "registration": true },
+            "oidc": null,
+            "max_upload_bytes": common::MAX_UPLOAD_BYTES,
+        })
+    );
+
+    let closed = TestApp::start_with(TestOptions {
+        settings: trovr_api::ApiSettings {
+            allow_registration: false,
+            ..TestOptions::default().settings
+        },
+        ..TestOptions::default()
+    })
+    .await;
+    let config = closed
+        .request(Method::GET, "/api/v1/auth/config", None, None)
+        .await;
+    assert_eq!(config.body["internal"]["registration"], false);
+
+    let oidc = TestApp::start_with(TestOptions {
+        internal_auth: false,
+        oidc_issuer: Some("https://idp.example.com/realms/trovr/".to_string()),
+        ..TestOptions::default()
+    })
+    .await;
+    let config = oidc
+        .request(Method::GET, "/api/v1/auth/config", None, None)
+        .await;
+    assert_eq!(
+        config.body["internal"],
+        json!({ "enabled": false, "registration": false })
+    );
+    assert_eq!(
+        config.body["oidc"],
+        json!({ "issuer": "https://idp.example.com/realms/trovr", "client_id": "trovr" })
+    );
+}
