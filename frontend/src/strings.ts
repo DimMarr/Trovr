@@ -39,6 +39,16 @@ export const strings = {
   actionsFor: (name: string) => `Actions for ${name}`,
   movedToTrash: (name: string) => `Moved “${name}” to the trash.`,
   close: 'Close',
+  download: 'Download',
+  versions: {
+    menu: 'Versions',
+    title: (name: string) => `Versions of “${name}”`,
+    description: 'Every version stays downloadable.',
+    name: (number: number) => `Version ${number}`,
+    current: 'Current',
+    upload: 'Upload a new version',
+    download: (number: number) => `Download version ${number}`,
+  },
   upload: 'Upload',
   uploadFiles: 'Upload files',
   uploads: {
