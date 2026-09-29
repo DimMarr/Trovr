@@ -37,6 +37,14 @@ impl ApiError {
         )
     }
 
+    pub fn forbidden() -> Self {
+        Self::new(
+            StatusCode::FORBIDDEN,
+            "forbidden",
+            "you do not have enough access to this resource",
+        )
+    }
+
     pub fn invalid_request(message: impl Into<String>) -> Self {
         Self::new(StatusCode::UNPROCESSABLE_ENTITY, "invalid_request", message)
     }

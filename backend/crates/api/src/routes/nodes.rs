@@ -1,13 +1,22 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
+use trovr_metadata::Role;
 use uuid::Uuid;
 
-use crate::access::owned_node;
+use crate::access::{authorize, role_name};
 use crate::dto::{NodeResponse, node_list};
 use crate::extract::CurrentUser;
 use crate::{ApiError, AppState};
+
+#[derive(Debug, Serialize)]
+pub(crate) struct NodeWithRole {
+    #[serde(flatten)]
+    node: NodeResponse,
+    /// The caller's access: `viewer`, `editor` or `owner`.
+    role: &'static str,
+}
 
 #[derive(Debug, Deserialize)]
 pub(crate) struct CreateFolderRequest {
@@ -42,7 +51,7 @@ pub(crate) async fn create_folder(
     Json(body): Json<CreateFolderRequest>,
 ) -> Result<(StatusCode, Json<NodeResponse>), ApiError> {
     if let Some(parent_id) = body.parent_id {
-        owned_node(&state, &user, parent_id).await?;
+        authorize(&state, &user, parent_id, Role::Editor).await?;
     }
     let folder = state
         .nodes
@@ -55,9 +64,12 @@ pub(crate) async fn get_node(
     State(state): State<AppState>,
     CurrentUser(user): CurrentUser,
     Path(node_id): Path<Uuid>,
-) -> Result<Json<NodeResponse>, ApiError> {
-    let node = owned_node(&state, &user, node_id).await?;
-    Ok(Json(node.into()))
+) -> Result<Json<NodeWithRole>, ApiError> {
+    let (node, role) = authorize(&state, &user, node_id, Role::Viewer).await?;
+    Ok(Json(NodeWithRole {
+        node: node.into(),
+        role: role_name(role),
+    }))
 }
 
 pub(crate) async fn list_children(
@@ -65,7 +77,7 @@ pub(crate) async fn list_children(
     CurrentUser(user): CurrentUser,
     Path(node_id): Path<Uuid>,
 ) -> Result<Json<Vec<NodeResponse>>, ApiError> {
-    owned_node(&state, &user, node_id).await?;
+    authorize(&state, &user, node_id, Role::Viewer).await?;
     let nodes = state.nodes.list_children(node_id).await?;
     Ok(Json(node_list(nodes)))
 }
@@ -75,8 +87,24 @@ pub(crate) async fn get_path(
     CurrentUser(user): CurrentUser,
     Path(node_id): Path<Uuid>,
 ) -> Result<Json<Vec<NodeResponse>>, ApiError> {
-    owned_node(&state, &user, node_id).await?;
-    let nodes = state.nodes.get_path(node_id).await?;
+    authorize(&state, &user, node_id, Role::Viewer).await?;
+    let mut nodes = state.nodes.get_path(node_id).await?;
+
+    // Access is inherited downwards, so the visible part of the path is a
+    // suffix: drop the ancestors above the first node the caller can see.
+    let mut hidden = 0;
+    for node in &nodes {
+        if state
+            .nodes
+            .effective_role(node.id, user.user_id)
+            .await?
+            .is_some()
+        {
+            break;
+        }
+        hidden += 1;
+    }
+    nodes.drain(..hidden);
     Ok(Json(node_list(nodes)))
 }
 
@@ -86,7 +114,7 @@ pub(crate) async fn rename(
     Path(node_id): Path<Uuid>,
     Json(body): Json<RenameRequest>,
 ) -> Result<Json<NodeResponse>, ApiError> {
-    owned_node(&state, &user, node_id).await?;
+    authorize(&state, &user, node_id, Role::Editor).await?;
     let node = state.nodes.rename(node_id, &body.name).await?;
     Ok(Json(node.into()))
 }
@@ -97,9 +125,19 @@ pub(crate) async fn move_node(
     Path(node_id): Path<Uuid>,
     Json(body): Json<MoveRequest>,
 ) -> Result<Json<NodeResponse>, ApiError> {
-    owned_node(&state, &user, node_id).await?;
-    if let Some(parent_id) = body.parent_id {
-        owned_node(&state, &user, parent_id).await?;
+    let (node, _) = authorize(&state, &user, node_id, Role::Editor).await?;
+    match body.parent_id {
+        Some(parent_id) => {
+            authorize(&state, &user, parent_id, Role::Editor).await?;
+            // Never move a node somewhere its owner cannot reach.
+            let owner_role = state.nodes.effective_role(parent_id, node.owner_id).await?;
+            if owner_role < Some(Role::Editor) {
+                return Err(ApiError::forbidden());
+            }
+        }
+        // The root a node lands in is its owner's.
+        None if node.owner_id != user.user_id => return Err(ApiError::forbidden()),
+        None => {}
     }
     let node = state.nodes.move_node(node_id, body.parent_id).await?;
     Ok(Json(node.into()))

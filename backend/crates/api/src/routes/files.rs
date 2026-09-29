@@ -3,11 +3,11 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use trovr_auth::AuthenticatedUser;
-use trovr_metadata::{NewContent, NewFile};
+use trovr_metadata::{NewContent, NewFile, Role};
 use trovr_storage::{ObjectInfo, ObjectStorage};
 use uuid::Uuid;
 
-use crate::access::owned_node;
+use crate::access::authorize;
 use crate::dto::{NodeResponse, PresignedResponse, VersionResponse};
 use crate::extract::CurrentUser;
 use crate::{ApiError, AppState};
@@ -81,7 +81,7 @@ pub(crate) async fn create_file(
     Json(body): Json<CreateFileRequest>,
 ) -> Result<(StatusCode, Json<NodeResponse>), ApiError> {
     if let Some(parent_id) = body.parent_id {
-        owned_node(&state, &user, parent_id).await?;
+        authorize(&state, &user, parent_id, Role::Editor).await?;
     }
     let object = uploaded_object(&state, &user, &body.storage_key).await?;
 
@@ -113,7 +113,7 @@ pub(crate) async fn create_version(
     Path(node_id): Path<Uuid>,
     Json(body): Json<CreateVersionRequest>,
 ) -> Result<(StatusCode, Json<VersionResponse>), ApiError> {
-    owned_node(&state, &user, node_id).await?;
+    authorize(&state, &user, node_id, Role::Editor).await?;
     let object = uploaded_object(&state, &user, &body.storage_key).await?;
 
     let version = state
@@ -137,7 +137,7 @@ pub(crate) async fn list_versions(
     CurrentUser(user): CurrentUser,
     Path(node_id): Path<Uuid>,
 ) -> Result<Json<Vec<VersionResponse>>, ApiError> {
-    owned_node(&state, &user, node_id).await?;
+    authorize(&state, &user, node_id, Role::Viewer).await?;
     let versions = state.nodes.list_versions(node_id).await?;
     Ok(Json(
         versions.into_iter().map(VersionResponse::from).collect(),
@@ -151,7 +151,7 @@ pub(crate) async fn download(
     Path(node_id): Path<Uuid>,
     Query(query): Query<DownloadQuery>,
 ) -> Result<Json<PresignedResponse>, ApiError> {
-    let node = owned_node(&state, &user, node_id).await?;
+    let (node, _) = authorize(&state, &user, node_id, Role::Viewer).await?;
     let version = match query.version_id {
         Some(version_id) => state
             .nodes

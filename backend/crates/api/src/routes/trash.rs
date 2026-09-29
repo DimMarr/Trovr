@@ -1,9 +1,10 @@
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use trovr_metadata::Role;
 use uuid::Uuid;
 
-use crate::access::{ensure_owner, owned_node};
+use crate::access::{authorize, authorize_any_state};
 use crate::dto::{NodeResponse, node_list};
 use crate::extract::CurrentUser;
 use crate::{ApiError, AppState};
@@ -13,7 +14,7 @@ pub(crate) async fn trash(
     CurrentUser(user): CurrentUser,
     Path(node_id): Path<Uuid>,
 ) -> Result<Json<NodeResponse>, ApiError> {
-    owned_node(&state, &user, node_id).await?;
+    authorize(&state, &user, node_id, Role::Editor).await?;
     let node = state.nodes.trash(node_id).await?;
     Ok(Json(node.into()))
 }
@@ -23,8 +24,7 @@ pub(crate) async fn restore(
     CurrentUser(user): CurrentUser,
     Path(node_id): Path<Uuid>,
 ) -> Result<Json<NodeResponse>, ApiError> {
-    let node = state.nodes.find_node(node_id).await?;
-    ensure_owner(&node, &user)?;
+    authorize_any_state(&state, &user, node_id, Role::Owner).await?;
     let node = state.nodes.restore(node_id).await?;
     Ok(Json(node.into()))
 }
@@ -45,8 +45,7 @@ pub(crate) async fn purge(
     CurrentUser(user): CurrentUser,
     Path(node_id): Path<Uuid>,
 ) -> Result<StatusCode, ApiError> {
-    let node = state.nodes.find_node(node_id).await?;
-    ensure_owner(&node, &user)?;
+    authorize_any_state(&state, &user, node_id, Role::Owner).await?;
 
     let storage_keys = state.nodes.purge(node_id).await?;
     if let Err(err) = state.storage.delete(&storage_keys).await {
