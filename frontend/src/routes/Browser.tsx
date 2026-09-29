@@ -8,6 +8,7 @@ import type { Node } from '@/api/types'
 import { Breadcrumb, type Crumb } from '@/components/Breadcrumb'
 import { MoveDialog } from '@/components/dialogs/MoveDialog'
 import { NameDialog } from '@/components/dialogs/NameDialog'
+import { ShareDialog } from '@/components/dialogs/ShareDialog'
 import { DropZone } from '@/components/DropZone'
 import { NodeActions, type NodeCommand } from '@/components/NodeActions'
 import { NodeTable } from '@/components/NodeTable'
@@ -42,6 +43,7 @@ export function Browser() {
   const [renaming, setRenaming] = useState<Node | null>(null)
   const [moving, setMoving] = useState<Node | null>(null)
   const [versionsOf, setVersionsOf] = useState<Node | null>(null)
+  const [sharing, setSharing] = useState<Node | null>(null)
   const uploads = useUploads()
   const picker = useRef<HTMLInputElement>(null)
   const download = useDownload((node: Node) => files.download(node.id))
@@ -67,6 +69,7 @@ export function Browser() {
   function run(command: NodeCommand, node: Node) {
     if (command === 'download') download.mutate(node)
     else if (command === 'versions') setVersionsOf(node)
+    else if (command === 'share') setSharing(node)
     else if (command === 'rename') setRenaming(node)
     else if (command === 'move') setMoving(node)
     else trash.mutate(node)
@@ -148,6 +151,7 @@ export function Browser() {
         role={role}
         onOpenChange={(open) => !open && setVersionsOf(null)}
       />
+      <ShareDialog node={sharing} onOpenChange={(open) => !open && setSharing(null)} />
       <MoveDialog
         node={moving}
         canMoveToRoot={role === 'owner'}
