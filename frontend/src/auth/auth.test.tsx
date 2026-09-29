@@ -4,32 +4,11 @@ import { http, HttpResponse } from 'msw'
 import { describe, expect, test } from 'vitest'
 
 import { request } from '@/api/client'
-import { AppRoutes } from '@/App'
-import { AuthProvider } from '@/auth/AuthProvider'
-import type { OidcClient } from '@/auth/oidc'
-import {
-  LocationProbe,
-  alice,
-  fakeJwt,
-  fakeOidcClient,
-  mockAuthConfig,
-  mockMe,
-  storeSession,
-} from '@/test/auth'
-import { renderWithProviders } from '@/test/render'
+import { currentLocation, renderApp } from '@/test/app'
+import { alice, fakeJwt, fakeOidcClient, mockAuthConfig, mockMe, storeSession } from '@/test/auth'
 import { server } from '@/test/server'
 
-function renderApp(route: string, oidc: OidcClient = fakeOidcClient()) {
-  return renderWithProviders(
-    <AuthProvider createOidcClient={() => oidc}>
-      <AppRoutes />
-      <LocationProbe />
-    </AuthProvider>,
-    { route },
-  )
-}
-
-const location = () => screen.getByTestId('location').textContent
+const location = currentLocation
 
 describe('internal sign-in', () => {
   test('signs in with email and password and goes to next', async () => {
