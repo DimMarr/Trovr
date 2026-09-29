@@ -13,9 +13,17 @@ import {
 import { type Action, can } from '@/lib/permissions'
 import { strings } from '@/strings'
 
-export type NodeCommand = 'rename' | 'move' | 'trash'
+export type NodeCommand = 'download' | 'versions' | 'rename' | 'move' | 'trash'
 
-const items: { command: NodeCommand; action: Action; label: string; destructive?: boolean }[] = [
+const items: {
+  command: NodeCommand
+  action: Action
+  label: string
+  filesOnly?: boolean
+  destructive?: boolean
+}[] = [
+  { command: 'download', action: 'download', label: strings.download, filesOnly: true },
+  { command: 'versions', action: 'versions', label: strings.versions.menu, filesOnly: true },
   { command: 'rename', action: 'rename', label: strings.rename },
   { command: 'move', action: 'move', label: strings.move },
   { command: 'trash', action: 'trash', label: strings.moveToTrash, destructive: true },
@@ -31,7 +39,9 @@ export function NodeActions({
   role: Role | undefined
   onCommand: (command: NodeCommand, node: Node) => void
 }) {
-  const allowed = items.filter((item) => can(role, item.action))
+  const allowed = items.filter(
+    (item) => can(role, item.action) && (!item.filesOnly || node.type === 'file'),
+  )
   if (allowed.length === 0) return null
 
   return (
