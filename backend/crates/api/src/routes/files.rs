@@ -3,7 +3,7 @@ use axum::extract::{Path, Query, State};
 use axum::http::StatusCode;
 use serde::{Deserialize, Serialize};
 use trovr_auth::AuthenticatedUser;
-use trovr_metadata::{NewContent, NewFile, Role};
+use trovr_metadata::{NewContent, NewFile, Node, Role};
 use trovr_storage::{ObjectInfo, ObjectStorage};
 use uuid::Uuid;
 
@@ -152,15 +152,27 @@ pub(crate) async fn download(
     Query(query): Query<DownloadQuery>,
 ) -> Result<Json<PresignedResponse>, ApiError> {
     let (node, _) = authorize(&state, &user, node_id, Role::Viewer).await?;
-    let version = match query.version_id {
+    Ok(Json(
+        presign_download(&state, &node, query.version_id).await?,
+    ))
+}
+
+/// Presigns a GET for a version of a live file (the current one by default),
+/// saved under the file's name.
+pub(crate) async fn presign_download(
+    state: &AppState,
+    node: &Node,
+    version_id: Option<Uuid>,
+) -> Result<PresignedResponse, ApiError> {
+    let version = match version_id {
         Some(version_id) => state
             .nodes
-            .list_versions(node_id)
+            .list_versions(node.id)
             .await?
             .into_iter()
             .find(|version| version.id == version_id)
             .ok_or_else(ApiError::not_found)?,
-        None => state.nodes.current_version(node_id).await?,
+        None => state.nodes.current_version(node.id).await?,
     };
 
     let request = state
@@ -172,10 +184,10 @@ pub(crate) async fn download(
         )
         .await?;
 
-    Ok(Json(PresignedResponse::new(
+    Ok(PresignedResponse::new(
         request,
         state.settings.download_url_ttl,
-    )))
+    ))
 }
 
 /// Checks that `storage_key` is one of the caller's uploads, that it really

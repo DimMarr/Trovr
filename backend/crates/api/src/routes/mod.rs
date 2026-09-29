@@ -7,6 +7,7 @@ pub(crate) mod auth;
 pub(crate) mod files;
 pub(crate) mod health;
 pub(crate) mod nodes;
+pub(crate) mod public;
 pub(crate) mod shares;
 pub(crate) mod trash;
 
@@ -36,4 +37,13 @@ pub(crate) fn api() -> Router<AppState> {
         .route("/nodes/{id}/shares", get(shares::list).post(shares::share))
         .route("/nodes/{id}/shares/{user_id}", delete(shares::unshare))
         .route("/shared", get(shares::shared_with_me))
+        .route("/nodes/{id}/links", post(shares::create_link))
+        .route("/nodes/{id}/links/{link_id}", delete(shares::delete_link))
+        // Unauthenticated: the link token is the credential.
+        .route("/public/{token}", get(public::root))
+        .route(
+            "/public/{token}/nodes/{id}/children",
+            get(public::list_children),
+        )
+        .route("/public/{token}/nodes/{id}/download", get(public::download))
 }

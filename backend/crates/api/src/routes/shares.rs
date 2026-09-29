@@ -3,6 +3,7 @@ use std::collections::HashMap;
 use axum::Json;
 use axum::extract::{Path, State};
 use axum::http::StatusCode;
+use chrono::{TimeDelta, Utc};
 use serde::Deserialize;
 use trovr_auth::{find_users_by_email, find_users_by_ids};
 use trovr_metadata::Role;
@@ -19,6 +20,13 @@ use crate::{ApiError, AppState};
 pub(crate) struct ShareRequest {
     email: String,
     role: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub(crate) struct LinkRequest {
+    /// The link never expires when absent.
+    #[serde(default)]
+    expires_in_seconds: Option<i64>,
 }
 
 /// Only `viewer` and `editor` can be granted; ownership never moves.
@@ -123,4 +131,43 @@ pub(crate) async fn shared_with_me(
 ) -> Result<Json<Vec<NodeResponse>>, ApiError> {
     let nodes = state.nodes.list_shared_with(user.user_id).await?;
     Ok(Json(node_list(nodes)))
+}
+
+/// Creates a public read-only link to a node and its subtree.
+pub(crate) async fn create_link(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path(node_id): Path<Uuid>,
+    Json(body): Json<LinkRequest>,
+) -> Result<(StatusCode, Json<LinkResponse>), ApiError> {
+    authorize(&state, &user, node_id, Role::Owner).await?;
+    let expires_at = match body.expires_in_seconds {
+        None => None,
+        Some(seconds) if seconds <= 0 => {
+            return Err(ApiError::invalid_request(
+                "expires_in_seconds must be positive",
+            ));
+        }
+        Some(seconds) => Some(
+            TimeDelta::try_seconds(seconds)
+                .and_then(|lifetime| Utc::now().checked_add_signed(lifetime))
+                .ok_or_else(|| ApiError::invalid_request("expires_in_seconds is too large"))?,
+        ),
+    };
+
+    let link = state
+        .nodes
+        .create_link(node_id, expires_at, user.user_id)
+        .await?;
+    Ok((StatusCode::CREATED, Json(link.into())))
+}
+
+pub(crate) async fn delete_link(
+    State(state): State<AppState>,
+    CurrentUser(user): CurrentUser,
+    Path((node_id, link_id)): Path<(Uuid, Uuid)>,
+) -> Result<StatusCode, ApiError> {
+    authorize(&state, &user, node_id, Role::Owner).await?;
+    state.nodes.delete_link(node_id, link_id).await?;
+    Ok(StatusCode::NO_CONTENT)
 }
