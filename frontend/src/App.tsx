@@ -11,6 +11,8 @@ import { AuthCallback } from '@/routes/AuthCallback'
 import { Browser } from '@/routes/Browser'
 import { Login } from '@/routes/Login'
 import { Register } from '@/routes/Register'
+import { Shared } from '@/routes/Shared'
+import { Trash } from '@/routes/Trash'
 
 export function AppRoutes() {
   return (
@@ -22,6 +24,8 @@ export function AppRoutes() {
         <Route element={<AppLayout />}>
           <Route index element={<Browser />} />
           <Route path="folders/:id" element={<Browser />} />
+          <Route path="shared" element={<Shared />} />
+          <Route path="trash" element={<Trash />} />
           <Route path="*" element={<NotFound />} />
         </Route>
       </Route>

@@ -39,6 +39,20 @@ export const strings = {
   actionsFor: (name: string) => `Actions for ${name}`,
   movedToTrash: (name: string) => `Moved “${name}” to the trash.`,
   close: 'Close',
+  cancel: 'Cancel',
+  nothingShared: 'Nothing is shared with you yet.',
+  trashView: {
+    empty: 'The trash is empty.',
+    trashedOn: (date: string) => `Trashed ${date}`,
+    restore: 'Restore',
+    restoreLabel: (name: string) => `Restore ${name}`,
+    restored: (name: string) => `Restored “${name}”.`,
+    purge: 'Delete forever',
+    purgeLabel: (name: string) => `Delete ${name} forever`,
+    purgeTitle: (name: string) => `Delete “${name}” forever?`,
+    purgeDescription:
+      'It and everything inside it will be permanently deleted. This cannot be undone.',
+  },
   share: {
     menu: 'Share',
     title: (name: string) => `Share “${name}”`,
