@@ -85,11 +85,17 @@ describe('uploads', () => {
   test('runs at most three uploads at a time', async () => {
     signedInWithLimit()
     liveRoot()
-    const log = mockUploads({ putDelayMs: 30 })
+    const log = mockUploads({ holdPuts: true })
     renderApp('/')
 
     await pickFiles(...['1', '2', '3', '4', '5'].map((n) => new File([n], `${n}.txt`)))
 
+    await waitFor(() => expect(log.activePuts).toBe(3))
+    // Give the queue a chance to (wrongly) start a fourth one.
+    await new Promise((resolve) => setTimeout(resolve, 50))
+    expect(log.presigned).toHaveLength(3)
+
+    log.release()
     await waitFor(() => expect(log.confirmed).toHaveLength(5))
     expect(log.maxConcurrentPuts).toBe(3)
   })
