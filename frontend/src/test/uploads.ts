@@ -1,4 +1,4 @@
-import { http, HttpResponse, delay } from 'msw'
+import { http, HttpResponse } from 'msw'
 
 import type { Node } from '@/api/types'
 
@@ -20,25 +20,34 @@ export interface UploadLog {
   putHeaders: Record<string, string>[]
   confirmed: unknown[]
   maxConcurrentPuts: number
+  activePuts: number
+  /** Lets held PUTs (see `holdPuts`) complete. */
+  release: () => void
 }
 
 /** Mocks presign → PUT to storage → confirm; confirmations add the file to `root`. */
 export function mockUploads({
-  putDelayMs = 0,
+  holdPuts = false,
   onConfirm,
 }: {
-  putDelayMs?: number
+  /** Keep every PUT pending until `log.release()`, to observe concurrency. */
+  holdPuts?: boolean
   onConfirm?: (body: { name: string; parent_id: string | null }) => Node
 } = {}) {
+  let release = () => {}
+  const released = holdPuts
+    ? new Promise<void>((resolve) => (release = resolve))
+    : Promise.resolve()
   const log: UploadLog = {
     steps: [],
     presigned: [],
     putHeaders: [],
     confirmed: [],
     maxConcurrentPuts: 0,
+    activePuts: 0,
+    release: () => release(),
   }
   let counter = 0
-  let activePuts = 0
   server.use(
     http.post('/api/v1/uploads', async ({ request }) => {
       counter += 1
@@ -65,10 +74,10 @@ export function mockUploads({
     http.put(`${STORAGE}/users/:user/:key`, async ({ request }) => {
       log.steps.push('put')
       log.putHeaders.push(Object.fromEntries(request.headers.entries()))
-      activePuts += 1
-      log.maxConcurrentPuts = Math.max(log.maxConcurrentPuts, activePuts)
-      await delay(putDelayMs)
-      activePuts -= 1
+      log.activePuts += 1
+      log.maxConcurrentPuts = Math.max(log.maxConcurrentPuts, log.activePuts)
+      await released
+      log.activePuts -= 1
       return new HttpResponse(null, { status: 200, headers: CORS })
     }),
     http.post('/api/v1/files', async ({ request }) => {
