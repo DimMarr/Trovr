@@ -1,0 +1,19 @@
+{{ $config := .Values.api.config -}}
+{{- $_ := required "api.config.APP__S3_BUCKET is required" $config.APP__S3_BUCKET -}}
+{{- if has $config.APP__AUTH_MODE (list "oidc" "both") }}
+{{- $_ := required "api.config.APP__OIDC_ISSUER_URL is required with oidc/both" $config.APP__OIDC_ISSUER_URL -}}
+{{- $_ := required "api.config.APP__OIDC_CLIENT_ID is required with oidc/both" $config.APP__OIDC_CLIENT_ID -}}
+{{- end }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "trovr.fullname" . }}-api
+  labels:
+    {{- include "trovr.labels" . | nindent 4 }}
+data:
+  APP__BIND_ADDR: "0.0.0.0:8080"
+  {{- range $key, $value := $config }}
+  {{- if ne (toString $value) "" }}
+  {{ $key }}: {{ toString $value | quote }}
+  {{- end }}
+  {{- end }}

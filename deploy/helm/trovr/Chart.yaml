@@ -1,0 +1,11 @@
+apiVersion: v2
+name: trovr
+description: Self-hosted, cloud-native file storage and sharing (API + web client).
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+home: https://github.com/DimMarr/Trovr
+sources:
+  - https://github.com/DimMarr/Trovr
+annotations:
+  licenses: Apache-2.0
