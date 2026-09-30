@@ -14,6 +14,7 @@ pub(crate) mod trash;
 /// Routes served under `/api/v1`.
 pub(crate) fn api() -> Router<AppState> {
     Router::new()
+        .route("/auth/config", get(auth::config))
         .route("/auth/register", post(auth::register))
         .route("/auth/login", post(auth::login))
         .route("/me", get(auth::me))

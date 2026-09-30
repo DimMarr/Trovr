@@ -44,6 +44,16 @@ impl OidcValidator {
         }
     }
 
+    /// The issuer, without a trailing slash.
+    pub fn issuer_url(&self) -> &str {
+        &self.issuer_url
+    }
+
+    /// The client id tokens must be issued for (their `aud`).
+    pub fn client_id(&self) -> &str {
+        &self.client_id
+    }
+
     async fn fetch_jwks(&self) -> Result<JwkSet, AuthError> {
         let discovery_url = format!("{}/.well-known/openid-configuration", self.issuer_url);
 
