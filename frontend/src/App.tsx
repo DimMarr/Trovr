@@ -10,6 +10,7 @@ import { createQueryClient } from '@/lib/query'
 import { AuthCallback } from '@/routes/AuthCallback'
 import { Browser } from '@/routes/Browser'
 import { Login } from '@/routes/Login'
+import { PublicLink } from '@/routes/PublicLink'
 import { Register } from '@/routes/Register'
 import { Shared } from '@/routes/Shared'
 import { Trash } from '@/routes/Trash'
@@ -20,6 +21,8 @@ export function AppRoutes() {
       <Route path="/login" element={<Login />} />
       <Route path="/register" element={<Register />} />
       <Route path="/auth/callback" element={<AuthCallback />} />
+      <Route path="/s/:token" element={<PublicLink />} />
+      <Route path="/s/:token/:folderId" element={<PublicLink />} />
       <Route element={<RequireAuth />}>
         <Route element={<AppLayout />}>
           <Route index element={<Browser />} />

@@ -39,6 +39,12 @@ export const strings = {
   actionsFor: (name: string) => `Actions for ${name}`,
   movedToTrash: (name: string) => `Moved “${name}” to the trash.`,
   close: 'Close',
+  public: {
+    dead: 'This link is no longer valid.',
+    outside: 'This folder is not part of the shared link.',
+    backToRoot: 'Back to the shared folder',
+    folder: 'Folder',
+  },
   cancel: 'Cancel',
   nothingShared: 'Nothing is shared with you yet.',
   trashView: {
