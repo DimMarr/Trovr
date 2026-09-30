@@ -1,0 +1,127 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend:
+    name: Backend
+    runs-on: ubuntu-latest
+    env:
+      CARGO_TERM_COLOR: always
+      # Builds against the committed .sqlx cache: proves it matches the queries.
+      SQLX_OFFLINE: "true"
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: backend
+      - name: Format
+        run: cargo fmt --all --manifest-path backend/Cargo.toml -- --check
+      - name: Clippy
+        run: cargo clippy --manifest-path backend/Cargo.toml --workspace --all-targets --locked -- -D warnings
+      # Integration tests start PostgreSQL and Garage with testcontainers on the runner's Docker,
+      # and run every migration.
+      - name: Test
+        run: cargo test --manifest-path backend/Cargo.toml --workspace --locked
+
+  frontend:
+    name: Frontend
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v5
+      # Uses the version pinned by "packageManager" in package.json.
+      - uses: pnpm/action-setup@v4
+        with:
+          package_json_file: frontend/package.json
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: frontend/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - name: Format
+        run: pnpm exec prettier --check .
+      - name: Lint
+        run: pnpm lint
+      - name: Typecheck
+        run: pnpm typecheck
+      - name: Test
+        run: pnpm test
+      - name: Build
+        run: pnpm build
+
+  helm:
+    name: Helm chart
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: azure/setup-helm@v4
+      - name: Lint
+        run: helm lint --strict deploy/helm/trovr -f deploy/helm/trovr/ci/example-values.yaml
+      - name: Validate rendered manifests
+        run: |
+          helm template trovr deploy/helm/trovr -f deploy/helm/trovr/ci/example-values.yaml > rendered.yaml
+          docker run --rm -v "$PWD:/work" ghcr.io/yannh/kubeconform:latest -strict -summary /work/rendered.yaml
+
+  images:
+    name: Image (${{ matrix.name }})
+    needs: [backend, frontend, helm]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # Only used when pushing, i.e. on main and tags; pull requests only build.
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: api
+            context: backend
+          - name: web
+            context: frontend
+    steps:
+      - uses: actions/checkout@v5
+      - name: Image name
+        id: image
+        # Registry names must be lowercase; the owner may not be.
+        run: echo "name=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/trovr-${{ matrix.name }}" >> "$GITHUB_OUTPUT"
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/login-action@v3
+        if: github.event_name == 'push'
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ steps.image.outputs.name }}
+          tags: |
+            type=ref,event=branch
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=sha
+      - uses: docker/build-push-action@v6
+        with:
+          context: ${{ matrix.context }}
+          push: ${{ github.event_name == 'push' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha,scope=${{ matrix.name }}
+          cache-to: type=gha,scope=${{ matrix.name }},mode=max
