@@ -1,23 +1,27 @@
-import { FolderPlusIcon } from 'lucide-react'
-import { useState } from 'react'
+import { FolderPlusIcon, UploadIcon } from 'lucide-react'
+import { useRef, useState } from 'react'
 import { useNavigate, useParams } from 'react-router'
 
 import { ApiError } from '@/api/client'
+import { files } from '@/api/files'
 import type { Node } from '@/api/types'
 import { Breadcrumb, type Crumb } from '@/components/Breadcrumb'
 import { MoveDialog } from '@/components/dialogs/MoveDialog'
 import { NameDialog } from '@/components/dialogs/NameDialog'
+import { DropZone } from '@/components/DropZone'
 import { NodeActions, type NodeCommand } from '@/components/NodeActions'
 import { NodeTable } from '@/components/NodeTable'
 import { NotFound } from '@/components/NotFound'
 import { PageHeader } from '@/components/PageHeader'
 import { TableSkeleton } from '@/components/TableSkeleton'
 import { Button } from '@/components/ui/button'
+import { useDownload } from '@/hooks/download'
 import { useCreateFolder, useRename, useTrash } from '@/hooks/mutations'
 import { useChildren, useNode, usePath } from '@/hooks/nodes'
 import { errorMessage } from '@/lib/errors'
 import { can } from '@/lib/permissions'
 import { strings } from '@/strings'
+import { useUploads } from '@/transfers/context'
 
 function isMissing(error: unknown) {
   return error instanceof ApiError && (error.status === 404 || error.status === 403)
@@ -36,6 +40,9 @@ export function Browser() {
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState<Node | null>(null)
   const [moving, setMoving] = useState<Node | null>(null)
+  const uploads = useUploads()
+  const picker = useRef<HTMLInputElement>(null)
+  const download = useDownload((node: Node) => files.download(node.id))
 
   if (isMissing(folder.error) || isMissing(children.error)) return <NotFound />
 
@@ -52,6 +59,7 @@ export function Browser() {
 
   function open(node: Node) {
     if (node.type === 'folder') navigate(`/folders/${node.id}`)
+    else download.mutate(node)
   }
 
   function run(command: NodeCommand, node: Node) {
@@ -70,29 +78,52 @@ export function Browser() {
         title={title}
         breadcrumb={id !== null && <Breadcrumb crumbs={crumbs} />}
         actions={
-          can(role, 'createFolder') && (
-            <Button variant="outline" onClick={() => setCreating(true)}>
-              <FolderPlusIcon />
-              {strings.newFolder}
-            </Button>
-          )
+          <>
+            {can(role, 'createFolder') && (
+              <Button variant="outline" onClick={() => setCreating(true)}>
+                <FolderPlusIcon />
+                {strings.newFolder}
+              </Button>
+            )}
+            {can(role, 'upload') && (
+              <>
+                <Button onClick={() => picker.current?.click()}>
+                  <UploadIcon />
+                  {strings.upload}
+                </Button>
+                <input
+                  ref={picker}
+                  type="file"
+                  multiple
+                  hidden
+                  aria-label={strings.uploadFiles}
+                  onChange={(event) => {
+                    uploads.enqueue(Array.from(event.target.files ?? []), id)
+                    event.target.value = ''
+                  }}
+                />
+              </>
+            )}
+          </>
         }
       />
-      {children.isPending ? (
-        <TableSkeleton />
-      ) : children.isError ? (
-        <p role="alert" className="text-destructive">
-          {errorMessage(children.error)}
-        </p>
-      ) : children.data.length === 0 ? (
-        <p className="text-muted-foreground py-16 text-center">{strings.emptyFolder}</p>
-      ) : (
-        <NodeTable
-          nodes={children.data}
-          onOpen={open}
-          actions={(node) => <NodeActions node={node} role={role} onCommand={run} />}
-        />
-      )}
+      <DropZone enabled={can(role, 'upload')} onFiles={(dropped) => uploads.enqueue(dropped, id)}>
+        {children.isPending ? (
+          <TableSkeleton />
+        ) : children.isError ? (
+          <p role="alert" className="text-destructive">
+            {errorMessage(children.error)}
+          </p>
+        ) : children.data.length === 0 ? (
+          <p className="text-muted-foreground py-16 text-center">{strings.emptyFolder}</p>
+        ) : (
+          <NodeTable
+            nodes={children.data}
+            onOpen={open}
+            actions={(node) => <NodeActions node={node} role={role} onCommand={run} />}
+          />
+        )}
+      </DropZone>
       <NameDialog
         open={creating}
         onOpenChange={setCreating}
