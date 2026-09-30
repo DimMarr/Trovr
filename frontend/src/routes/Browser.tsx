@@ -14,6 +14,7 @@ import { NodeTable } from '@/components/NodeTable'
 import { NotFound } from '@/components/NotFound'
 import { PageHeader } from '@/components/PageHeader'
 import { TableSkeleton } from '@/components/TableSkeleton'
+import { VersionsSheet } from '@/components/VersionsSheet'
 import { Button } from '@/components/ui/button'
 import { useDownload } from '@/hooks/download'
 import { useCreateFolder, useRename, useTrash } from '@/hooks/mutations'
@@ -40,6 +41,7 @@ export function Browser() {
   const [creating, setCreating] = useState(false)
   const [renaming, setRenaming] = useState<Node | null>(null)
   const [moving, setMoving] = useState<Node | null>(null)
+  const [versionsOf, setVersionsOf] = useState<Node | null>(null)
   const uploads = useUploads()
   const picker = useRef<HTMLInputElement>(null)
   const download = useDownload((node: Node) => files.download(node.id))
@@ -63,7 +65,9 @@ export function Browser() {
   }
 
   function run(command: NodeCommand, node: Node) {
-    if (command === 'rename') setRenaming(node)
+    if (command === 'download') download.mutate(node)
+    else if (command === 'versions') setVersionsOf(node)
+    else if (command === 'rename') setRenaming(node)
     else if (command === 'move') setMoving(node)
     else trash.mutate(node)
   }
@@ -138,6 +142,11 @@ export function Browser() {
         submitLabel={strings.rename}
         initialName={renaming?.name}
         onSubmit={(name) => rename.mutateAsync({ node: renaming!, name })}
+      />
+      <VersionsSheet
+        node={versionsOf}
+        role={role}
+        onOpenChange={(open) => !open && setVersionsOf(null)}
       />
       <MoveDialog
         node={moving}
