@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "trovr.fullname" . }}-web
+  labels:
+    {{- include "trovr.labels" . | nindent 4 }}
+    app.kubernetes.io/component: web
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+  selector:
+    {{- include "trovr.selectorLabels" (dict "root" . "component" "web") | nindent 4 }}

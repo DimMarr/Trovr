@@ -1,0 +1,14 @@
+Trovr is deploying: {{ include "trovr.fullname" . }}-api and {{ include "trovr.fullname" . }}-web.
+
+{{- if .Values.ingress.enabled }}
+
+Open {{ if .Values.ingress.tlsSecretName }}https{{ else }}http{{ end }}://{{ .Values.ingress.host }}
+{{- else }}
+
+No Ingress is enabled. To try it locally:
+  kubectl port-forward svc/{{ include "trovr.fullname" . }}-web 8080:8080
+and open http://localhost:8080
+{{- end }}
+
+Browsers upload and download files straight to the object storage: its bucket
+must allow CORS (GET, PUT) from the web origin. See the repository README.

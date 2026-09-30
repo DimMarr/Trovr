@@ -1,0 +1,79 @@
+# PostgreSQL and the S3-compatible object storage are external: point the
+# settings below at them. See the repository README for every APP__ setting.
+
+api:
+  image:
+    repository: ghcr.io/dimmarr/trovr-api
+    # Defaults to the chart's appVersion.
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 100m
+      memory: 64Mi
+    limits:
+      memory: 256Mi
+  # Non-secret settings, passed as environment variables (APP__* names).
+  config:
+    APP__LOG_FORMAT: json
+    # internal | oidc | both
+    APP__AUTH_MODE: internal
+    APP__AUTH_ALLOW_REGISTRATION: "false"
+    # Required with oidc/both.
+    APP__OIDC_ISSUER_URL: ""
+    APP__OIDC_CLIENT_ID: ""
+    # Empty means AWS S3. The public URL is what browsers use for presigned
+    # requests, when it differs from how the API reaches the storage.
+    APP__S3_ENDPOINT_URL: ""
+    APP__S3_PUBLIC_ENDPOINT_URL: ""
+    APP__S3_REGION: us-east-1
+    APP__S3_BUCKET: ""
+    APP__S3_FORCE_PATH_STYLE: "true"
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+web:
+  image:
+    repository: ghcr.io/dimmarr/trovr-web
+    tag: ""
+    pullPolicy: IfNotPresent
+  replicaCount: 2
+  resources:
+    requests:
+      cpu: 20m
+      memory: 16Mi
+    limits:
+      memory: 64Mi
+  podAnnotations: {}
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+# Secret settings. Either name an existing Secret holding these keys, or give
+# the values here and the chart creates the Secret.
+secrets:
+  existingSecret: ""
+  APP__DATABASE_URL: ""
+  # Needed for internal sign-in (APP__AUTH_MODE internal or both): an RSA key
+  # pair in PEM format.
+  APP__JWT_PRIVATE_KEY_PEM: ""
+  APP__JWT_PUBLIC_KEY_PEM: ""
+  APP__S3_ACCESS_KEY_ID: ""
+  APP__S3_SECRET_ACCESS_KEY: ""
+
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  host: drive.example.com
+  # Name of the TLS Secret for the host; empty disables TLS.
+  tlsSecretName: ""
+
+serviceAccount:
+  create: true
+  name: ""
+
+imagePullSecrets: []
