@@ -1,0 +1,90 @@
+# Local development stack: http://localhost:8080
+#   ./deploy/compose/init-env.sh      # once: generates .env (keys, dev credentials)
+#   docker compose up -d --build --wait
+#   ./deploy/compose/smoke.sh         # optional end-to-end check
+name: trovr
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: trovr
+      POSTGRES_DB: trovr
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?run ./deploy/compose/init-env.sh first}
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U trovr -d trovr"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  garage:
+    image: dxflrs/garage:v2.4.1
+    environment:
+      GARAGE_RPC_SECRET: ${GARAGE_RPC_SECRET:?run ./deploy/compose/init-env.sh first}
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN:?run ./deploy/compose/init-env.sh first}
+    volumes:
+      - ./deploy/compose/garage.toml:/etc/garage.toml:ro
+      - garage-meta:/var/lib/garage/meta
+      - garage-data:/var/lib/garage/data
+    ports:
+      # Browsers upload and download through presigned URLs on this port.
+      - "3900:3900"
+
+  garage-init:
+    image: alpine:3.22
+    command: ["/garage-init.sh"]
+    environment:
+      GARAGE_ADMIN_TOKEN: ${GARAGE_ADMIN_TOKEN}
+      S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+      S3_BUCKET: trovr
+      WEB_ORIGIN: http://localhost:8080
+    volumes:
+      - ./deploy/compose/garage-init.sh:/garage-init.sh:ro
+    depends_on:
+      - garage
+    restart: "no"
+
+  api:
+    build: ./backend
+    image: trovr-api:dev
+    environment:
+      APP__DATABASE_URL: postgres://trovr:${POSTGRES_PASSWORD}@postgres:5432/trovr
+      APP__LOG_FORMAT: pretty
+      APP__AUTH_MODE: internal
+      APP__AUTH_ALLOW_REGISTRATION: "true"
+      APP__JWT_PRIVATE_KEY_PEM: ${JWT_PRIVATE_KEY_PEM:?run ./deploy/compose/init-env.sh first}
+      APP__JWT_PUBLIC_KEY_PEM: ${JWT_PUBLIC_KEY_PEM}
+      APP__S3_ENDPOINT_URL: http://garage:3900
+      APP__S3_PUBLIC_ENDPOINT_URL: http://localhost:3900
+      APP__S3_REGION: garage
+      APP__S3_BUCKET: trovr
+      APP__S3_ACCESS_KEY_ID: ${S3_ACCESS_KEY_ID}
+      APP__S3_SECRET_ACCESS_KEY: ${S3_SECRET_ACCESS_KEY}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      garage-init:
+        condition: service_completed_successfully
+
+  web:
+    build: ./frontend
+    image: trovr-web:dev
+    environment:
+      TROVR_API_URL: http://api:8080
+    ports:
+      - "8080:8080"
+    depends_on:
+      - api
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8080/healthz"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+volumes:
+  postgres:
+  garage-meta:
+  garage-data:
