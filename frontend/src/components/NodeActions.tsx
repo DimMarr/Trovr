@@ -13,7 +13,7 @@ import {
 import { type Action, can } from '@/lib/permissions'
 import { strings } from '@/strings'
 
-export type NodeCommand = 'download' | 'versions' | 'rename' | 'move' | 'trash'
+export type NodeCommand = 'download' | 'versions' | 'share' | 'rename' | 'move' | 'trash'
 
 const items: {
   command: NodeCommand
@@ -24,6 +24,7 @@ const items: {
 }[] = [
   { command: 'download', action: 'download', label: strings.download, filesOnly: true },
   { command: 'versions', action: 'versions', label: strings.versions.menu, filesOnly: true },
+  { command: 'share', action: 'share', label: strings.share.menu },
   { command: 'rename', action: 'rename', label: strings.rename },
   { command: 'move', action: 'move', label: strings.move },
   { command: 'trash', action: 'trash', label: strings.moveToTrash, destructive: true },
