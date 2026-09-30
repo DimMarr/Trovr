@@ -19,6 +19,13 @@ export const strings = {
   signInFailed: 'Sign-in could not be completed.',
   backToSignIn: 'Back to sign in',
   noSignInMethod: 'No sign-in method is enabled on this server.',
+  myFiles: 'My files',
+  sharedWithMe: 'Shared with me',
+  trash: 'Trash',
+  emptyFolder: 'This folder is empty.',
+  notFound: 'Not found or no longer shared with you.',
+  backToMyFiles: 'Back to My files',
+  columns: { name: 'Name', size: 'Size', modified: 'Modified' },
   errors: {
     unexpected: 'Something went wrong. Please try again.',
     network_error: 'The server could not be reached.',
