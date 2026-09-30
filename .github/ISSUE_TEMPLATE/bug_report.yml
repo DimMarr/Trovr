@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug. Please do not report security issues here:
+        use the repository's Security tab ("Report a vulnerability") instead.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you did, what you expected, and what happened instead.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Sign in as …
+        2. Upload …
+        3. …
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Trovr version
+      description: Image tag or commit SHA.
+    validations:
+      required: true
+  - type: dropdown
+    id: deployment
+    attributes:
+      label: Deployment
+      options:
+        - docker-compose (local stack)
+        - Helm chart
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: storage
+    attributes:
+      label: Object storage and identity provider
+      description: e.g. Garage v2.4, AWS S3, MinIO; internal accounts or Keycloak 26.
+  - type: textarea
+    id: logs
+    attributes:
+      label: Relevant logs
+      description: API logs, browser console errors. Remove any secret.
+      render: shell
